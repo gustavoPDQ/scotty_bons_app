@@ -19,5 +19,12 @@ export async function signIn(
     return { data: null, error: "Incorrect email or password" };
   }
 
-  return { data: { redirectTo: "/dashboard" }, error: null };
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("user_id", authData.user.id)
+    .single();
+
+  const redirectTo = profile?.role === "admin" ? "/dashboard" : "/orders";
+  return { data: { redirectTo }, error: null };
 }
