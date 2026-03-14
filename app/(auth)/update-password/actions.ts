@@ -10,7 +10,7 @@ export async function updatePassword(
   const { error } = await supabase.auth.updateUser({ password });
 
   if (error) {
-    return { data: null, error: "Não foi possível redefinir a senha. Tente novamente." };
+    return { data: null, error: "Unable to reset password. Please try again." };
   }
 
   return { data: null, error: null };
