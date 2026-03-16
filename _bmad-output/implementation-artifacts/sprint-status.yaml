@@ -1,0 +1,115 @@
+# generated: 2026-03-13
+# project: scotty-ops
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-03-13
+project: scotty-ops
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  # ── Sprint 1 — MVP ─────────────────────────────────────────────────────────
+
+  # Epic 0: Project Setup & Infrastructure
+  epic-0: done
+  0-1-initialize-project-with-official-supabase-nextjs-starter: done
+  0-2-initialize-supabase-cli-and-create-foundation-migrations: done
+  0-3-configure-cicd-pipeline-and-vercel-environments: done
+  epic-0-retrospective: optional
+
+  # Epic 1: Authentication & User Management
+  epic-1: in-progress
+  1-1-user-login: done
+  1-2-password-reset-via-email: done
+  1-3-change-password-and-email: done
+  1-4-admin-create-users-and-seed-initial-store-data: done
+  1-5-rls-policies-role-based-data-isolation: done
+  1-6-admin-edit-and-deactivate-users: done
+  epic-1-retrospective: optional
+
+  # Epic 2: Product Catalog
+  epic-2: done
+  2-1-admin-manage-product-categories: done
+  2-2-admin-manage-products: done
+  2-3-store-user-browse-product-catalog: done
+  epic-2-retrospective: optional
+
+  # Epic 3: Order Management — Core Lifecycle
+  epic-3: in-progress
+  3-1-store-user-create-and-submit-supply-order: done
+  3-2-store-user-view-own-order-history-and-details: review
+  3-3-admin-view-all-orders-with-real-time-updates: backlog
+  3-4-admin-approve-decline-and-place-order-under-review: backlog
+  3-5-admin-edit-and-delete-orders: backlog
+  3-6-factory-user-view-approved-orders-and-mark-as-fulfilled: backlog
+  epic-3-retrospective: optional
+
+  # ── Sprint 2 — Post-MVP ─────────────────────────────────────────────────────
+
+  # Epic 4: Enhanced Order Management
+  epic-4: backlog
+  4-1-filter-and-search-orders: backlog
+  4-2-admin-aggregated-order-data-view: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: Financial Management
+  epic-5: backlog
+  5-1-admin-configure-financial-parameters: backlog
+  5-2-immutable-invoice-generation-on-fulfillment: backlog
+  5-3-view-invoice-history: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: Audit & Compliance
+  epic-6: backlog
+  6-1-admin-manage-audit-checklist-templates: backlog
+  6-2-admin-conduct-store-audit-with-scoring: backlog
+  6-3-admin-attach-photo-evidence-to-audit-items: backlog
+  6-4-store-user-view-audit-results-and-history: backlog
+  epic-6-retrospective: optional
+
+  # ── Sprint 3 — Insights & Go-Live ──────────────────────────────────────────
+
+  # Epic 7: Reporting & Dashboard
+  epic-7: backlog
+  7-1-admin-compliance-dashboard: backlog
+  7-2-admin-order-analytics-dashboard: backlog
+  7-3-admin-pdf-export-for-orders-and-audits: backlog
+  epic-7-retrospective: optional
+
+  # Epic 8: Notifications & Communications
+  epic-8: backlog
+  8-1-order-email-notifications: backlog
+  8-2-audit-submitted-email-notification: backlog
+  epic-8-retrospective: optional
