@@ -150,25 +150,16 @@ export async function fulfillOrder(
     return { data: null, error: "Unauthorized." };
   }
 
-  const { data: order } = await supabase
-    .from("orders")
-    .select("status")
-    .eq("id", orderId)
-    .single();
+  const { error: rpcError } = await supabase.rpc(
+    "fulfill_order_with_invoice",
+    { p_order_id: orderId },
+  );
 
-  if (!order) return { data: null, error: "Order not found." };
-
-  if (order.status !== "approved") {
-    return { data: null, error: "Only approved orders can be fulfilled." };
-  }
-
-  const { error: updateError } = await supabase
-    .from("orders")
-    .update({ status: "fulfilled", fulfilled_at: new Date().toISOString() })
-    .eq("id", orderId);
-
-  if (updateError) {
-    return { data: null, error: "Failed to fulfill order. Please try again." };
+  if (rpcError) {
+    return {
+      data: null,
+      error: rpcError.message || "Failed to fulfill order. Please try again.",
+    };
   }
 
   revalidatePath("/orders");

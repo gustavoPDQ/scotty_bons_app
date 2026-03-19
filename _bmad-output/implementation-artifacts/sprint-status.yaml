@@ -79,24 +79,24 @@ development_status:
   # ── Sprint 2 — Post-MVP ─────────────────────────────────────────────────────
 
   # Epic 4: Enhanced Order Management
-  epic-4: in-progress
-  4-1-filter-and-search-orders: ready-for-dev
-  4-2-admin-aggregated-order-data-view: ready-for-dev
+  epic-4: done
+  4-1-filter-and-search-orders: done
+  4-2-admin-aggregated-order-data-view: done
   epic-4-retrospective: optional
 
   # Epic 5: Financial Management
-  epic-5: in-progress
-  5-1-admin-configure-financial-parameters: ready-for-dev
-  5-2-immutable-invoice-generation-on-fulfillment: ready-for-dev
-  5-3-view-invoice-history: ready-for-dev
+  epic-5: done
+  5-1-admin-configure-financial-parameters: done
+  5-2-immutable-invoice-generation-on-fulfillment: done
+  5-3-view-invoice-history: done
   epic-5-retrospective: optional
 
   # Epic 6: Audit & Compliance
-  epic-6: in-progress
-  6-1-admin-manage-audit-checklist-templates: ready-for-dev
-  6-2-admin-conduct-store-audit-with-scoring: ready-for-dev
-  6-3-admin-attach-photo-evidence-to-audit-items: ready-for-dev
-  6-4-store-user-view-audit-results-and-history: ready-for-dev
+  epic-6: done
+  6-1-admin-manage-audit-checklist-templates: done
+  6-2-admin-conduct-store-audit-with-scoring: done
+  6-3-admin-attach-photo-evidence-to-audit-items: done
+  6-4-store-user-view-audit-results-and-history: done
   epic-6-retrospective: optional
 
   # ── Sprint 3 — Insights & Go-Live ──────────────────────────────────────────

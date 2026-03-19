@@ -61,3 +61,81 @@ export type OrderItemRow = {
   unit_price: number;
   quantity: number;
 };
+
+export type InvoiceRow = {
+  id: string;
+  order_id: string;
+  invoice_number: string;
+  store_id: string;
+  store_name: string;
+  company_name: string;
+  company_address: string;
+  company_tax_id: string;
+  subtotal: number;
+  tax_rate: number;
+  tax_amount: number;
+  grand_total: number;
+  created_at: string;
+};
+
+export type InvoiceItemRow = {
+  id: string;
+  invoice_id: string;
+  product_name: string;
+  unit_of_measure: string;
+  unit_price: number;
+  quantity: number;
+  line_total: number;
+};
+
+export type AuditTemplateRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  item_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AuditTemplateItemRow = {
+  id: string;
+  template_id: string;
+  label: string;
+  sort_order: number;
+  created_at: string;
+};
+
+export type AuditStatus = "draft" | "completed";
+
+export type AuditRow = {
+  id: string;
+  template_id: string;
+  store_id: string;
+  store_name?: string;
+  template_name?: string;
+  conducted_by: string;
+  conducted_by_name?: string;
+  status: AuditStatus;
+  score: number | null;
+  notes: string | null;
+  conducted_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AuditResponseRow = {
+  id: string;
+  audit_id: string;
+  template_item_id: string;
+  passed: boolean;
+  notes: string | null;
+};
+
+export type AuditEvidenceRow = {
+  id: string;
+  audit_response_id: string;
+  image_url: string;
+  caption: string | null;
+  created_at: string;
+};

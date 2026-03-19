@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, Clock, AlertCircle } from "lucide-react";
+import { ArrowLeft, Clock, AlertCircle, FileText } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatPrice } from "@/lib/utils";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/constants/order-status";
@@ -85,6 +86,17 @@ export default async function OrderDetailPage({
   const statusHistory = history ?? [];
   const status = order.status as OrderStatus;
 
+  // Check for linked invoice if fulfilled
+  let invoiceId: string | null = null;
+  if (status === "fulfilled") {
+    const { data: invoice } = await supabase
+      .from("invoices")
+      .select("id")
+      .eq("order_id", order.id)
+      .single();
+    invoiceId = invoice?.id ?? null;
+  }
+
   // Calculate order total from items
   const orderTotal = orderItems.reduce(
     (sum, item) => sum + Number(item.unit_price) * item.quantity,
@@ -135,6 +147,14 @@ export default async function OrderDetailPage({
             currentStatus={status}
             role={profile.role}
           />
+          {invoiceId && (
+            <Link href={`/invoices/${invoiceId}`}>
+              <Button variant="outline" size="sm">
+                <FileText className="size-4 mr-1.5" />
+                View Invoice
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
