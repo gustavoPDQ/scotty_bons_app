@@ -102,14 +102,14 @@ development_status:
   # ── Sprint 3 — Insights & Go-Live ──────────────────────────────────────────
 
   # Epic 7: Reporting & Dashboard
-  epic-7: in-progress
-  7-1-admin-compliance-dashboard: ready-for-dev
-  7-2-admin-order-analytics-dashboard: ready-for-dev
-  7-3-admin-pdf-export-for-orders-and-audits: ready-for-dev
+  epic-7: done
+  7-1-admin-compliance-dashboard: done
+  7-2-admin-order-analytics-dashboard: done
+  7-3-admin-pdf-export-for-orders-and-audits: done
   epic-7-retrospective: optional
 
   # Epic 8: Notifications & Communications
-  epic-8: in-progress
-  8-1-order-email-notifications: ready-for-dev
-  8-2-audit-submitted-email-notification: ready-for-dev
+  epic-8: done
+  8-1-order-email-notifications: done
+  8-2-audit-submitted-email-notification: done
   epic-8-retrospective: optional
