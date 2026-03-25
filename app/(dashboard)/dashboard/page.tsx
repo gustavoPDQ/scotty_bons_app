@@ -10,12 +10,11 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatPrice } from "@/lib/utils";
-import { STATUS_COLORS, STATUS_LABELS } from "@/lib/constants/order-status";
+import { STATUS_STYLES, STATUS_LABELS } from "@/lib/constants/order-status";
 import type { OrderStatus } from "@/lib/types";
 
 const ALL_STATUSES: OrderStatus[] = [
   "submitted",
-  "under_review",
   "approved",
   "declined",
   "fulfilled",
@@ -78,7 +77,6 @@ export default async function DashboardPage() {
   // Orders by status
   const statusCounts: Record<OrderStatus, number> = {
     submitted: 0,
-    under_review: 0,
     approved: 0,
     declined: 0,
     fulfilled: 0,
@@ -162,7 +160,7 @@ export default async function DashboardPage() {
           {ALL_STATUSES.map((status) => (
             <Card key={status}>
               <CardContent className="p-4 flex items-center gap-3">
-                <Badge className={STATUS_COLORS[status]}>
+                <Badge variant="status" style={STATUS_STYLES[status]}>
                   {STATUS_LABELS[status]}
                 </Badge>
                 <span className="text-xl font-bold ml-auto">
@@ -240,7 +238,7 @@ export default async function DashboardPage() {
                       <span className="text-sm font-medium">
                         {formatPrice(orderTotals[order.id] ?? 0)}
                       </span>
-                      <Badge className={STATUS_COLORS[status]}>
+                      <Badge variant="status" style={STATUS_STYLES[status]}>
                         {STATUS_LABELS[status]}
                       </Badge>
                     </div>

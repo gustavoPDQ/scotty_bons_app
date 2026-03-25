@@ -2,19 +2,27 @@
 
 import { useRef, useState, useTransition, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { AuditTemplateItemRow, AuditResponseRow, AuditEvidenceRow } from "@/lib/types";
+import type {
+  AuditTemplateCategoryRow,
+  AuditTemplateItemRow,
+  AuditResponseRow,
+  AuditEvidenceRow,
+  AuditRating,
+} from "@/lib/types";
+import { AUDIT_RATING_LABELS, AUDIT_RATING_STYLES } from "@/lib/constants/audit-status";
 import { saveAuditResponse, completeAudit } from "@/app/(dashboard)/audits/actions";
 import { AuditEvidenceUploader } from "@/components/audits/audit-evidence-uploader";
 
 interface AuditChecklistProps {
   auditId: string;
+  categories: AuditTemplateCategoryRow[];
   items: AuditTemplateItemRow[];
   existingResponses: AuditResponseRow[];
   existingEvidence: AuditEvidenceRow[];
@@ -22,13 +30,16 @@ interface AuditChecklistProps {
 
 interface ResponseState {
   id?: string;
-  passed: boolean;
+  rating: AuditRating;
   notes: string;
   saving: boolean;
 }
 
+const RATING_OPTIONS: AuditRating[] = ["poor", "satisfactory", "good"];
+
 export function AuditChecklist({
   auditId,
+  categories,
   items,
   existingResponses,
   existingEvidence,
@@ -41,7 +52,7 @@ export function AuditChecklist({
   for (const r of existingResponses) {
     initialResponses[r.template_item_id] = {
       id: r.id,
-      passed: r.passed,
+      rating: r.rating,
       notes: r.notes ?? "",
       saving: false,
     };
@@ -51,6 +62,9 @@ export function AuditChecklist({
   const responsesRef = useRef(responses);
   responsesRef.current = responses;
   const [auditNotes, setAuditNotes] = useState("");
+
+  // Collapsed categories
+  const [collapsedCats, setCollapsedCats] = useState<Record<string, boolean>>({});
 
   // Build evidence map: response_id -> evidence[]
   const [evidenceMap, setEvidenceMap] = useState<Record<string, AuditEvidenceRow[]>>(() => {
@@ -62,17 +76,26 @@ export function AuditChecklist({
     return map;
   });
 
-  const handleToggle = useCallback(
-    async (itemId: string, passed: boolean) => {
+  // Group items by category
+  const sortedCategories = [...categories].sort((a, b) => a.sort_order - b.sort_order);
+  const itemsByCategory: Record<string, AuditTemplateItemRow[]> = {};
+  for (const cat of sortedCategories) {
+    itemsByCategory[cat.id] = items
+      .filter((i) => i.category_id === cat.id)
+      .sort((a, b) => a.sort_order - b.sort_order);
+  }
+
+  const handleRating = useCallback(
+    async (itemId: string, rating: AuditRating) => {
       setResponses((prev) => ({
         ...prev,
-        [itemId]: { ...prev[itemId], passed, notes: prev[itemId]?.notes ?? "", saving: true },
+        [itemId]: { ...prev[itemId], rating, notes: prev[itemId]?.notes ?? "", saving: true },
       }));
 
       const result = await saveAuditResponse({
         audit_id: auditId,
         template_item_id: itemId,
-        passed,
+        rating,
         notes: responsesRef.current[itemId]?.notes || undefined,
       });
 
@@ -106,7 +129,7 @@ export function AuditChecklist({
       const result = await saveAuditResponse({
         audit_id: auditId,
         template_item_id: itemId,
-        passed: current.passed,
+        rating: current.rating,
         notes: current.notes || undefined,
       });
 
@@ -140,8 +163,14 @@ export function AuditChecklist({
     });
   }, [auditId, auditNotes, router]);
 
+  const totalItems = items.length;
   const answeredCount = Object.keys(responses).length;
-  const passedCount = Object.values(responses).filter((r) => r.passed).length;
+
+  const ratingWeights: Record<AuditRating, number> = { poor: 0, satisfactory: 0.5, good: 1 };
+  const ratingCounts = { poor: 0, satisfactory: 0, good: 0 };
+  for (const r of Object.values(responses)) {
+    ratingCounts[r.rating]++;
+  }
 
   const handleEvidenceChange = useCallback(
     (responseId: string, evidence: AuditEvidenceRow[]) => {
@@ -157,81 +186,129 @@ export function AuditChecklist({
         <CardContent className="py-4">
           <div className="flex items-center justify-between text-sm">
             <span>
-              {answeredCount} of {items.length} items answered
+              {answeredCount} of {totalItems} items rated
             </span>
-            <span className="flex items-center gap-4">
+            <span className="flex items-center gap-3">
               <span className="flex items-center gap-1">
-                <CheckCircle2 className="size-4 text-green-600" />
-                {passedCount} passed
+                <span className="size-2.5 rounded-full bg-green-500" />
+                {ratingCounts.good} good
               </span>
               <span className="flex items-center gap-1">
-                <XCircle className="size-4 text-red-600" />
-                {answeredCount - passedCount} failed
+                <span className="size-2.5 rounded-full bg-yellow-500" />
+                {ratingCounts.satisfactory} satisfactory
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="size-2.5 rounded-full bg-red-500" />
+                {ratingCounts.poor} poor
               </span>
             </span>
           </div>
           <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
             <div
               className="h-full bg-primary transition-all"
-              style={{ width: `${items.length > 0 ? (answeredCount / items.length) * 100 : 0}%` }}
+              style={{ width: `${totalItems > 0 ? (answeredCount / totalItems) * 100 : 0}%` }}
             />
           </div>
         </CardContent>
       </Card>
 
-      {/* Checklist items */}
-      {items.map((item) => {
-        const response = responses[item.id];
-        const responseId = response?.id;
-        const evidence = responseId ? (evidenceMap[responseId] ?? []) : [];
+      {/* Categories with items */}
+      {sortedCategories.map((cat) => {
+        const catItems = itemsByCategory[cat.id] ?? [];
+        const isCollapsed = !!collapsedCats[cat.id];
+        const catAnswered = catItems.filter((i) => responses[i.id]).length;
 
         return (
-          <Card key={item.id}>
-            <CardContent className="py-4">
-              <div className="flex items-start gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">{item.label}</p>
+          <Card key={cat.id}>
+            <CardHeader
+              className="cursor-pointer select-none py-3"
+              onClick={() => setCollapsedCats((prev) => ({ ...prev, [cat.id]: !prev[cat.id] }))}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {isCollapsed ? (
+                    <ChevronRight className="size-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="size-4 text-muted-foreground" />
+                  )}
+                  <CardTitle className="text-base">{cat.name}</CardTitle>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {catAnswered}/{catItems.length} rated
+                </span>
+              </div>
+            </CardHeader>
 
-                  {response !== undefined && (
-                    <div className="mt-3 space-y-2">
-                      <Textarea
-                        placeholder="Notes (optional)"
-                        rows={2}
-                        value={response.notes}
-                        onChange={(e) =>
-                          setResponses((prev) => ({
-                            ...prev,
-                            [item.id]: { ...prev[item.id], notes: e.target.value },
-                          }))
-                        }
-                        onBlur={() => handleNotesBlur(item.id)}
-                      />
+            {!isCollapsed && (
+              <CardContent className="pt-0 space-y-3">
+                {catItems.map((item) => {
+                  const response = responses[item.id];
+                  const responseId = response?.id;
+                  const evidence = responseId ? (evidenceMap[responseId] ?? []) : [];
 
-                      {responseId && (
-                        <AuditEvidenceUploader
-                          auditResponseId={responseId}
-                          evidence={evidence}
-                          onEvidenceChange={(ev) => handleEvidenceChange(responseId, ev)}
-                        />
+                  return (
+                    <div key={item.id} className="border rounded-lg p-3">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">{item.label}</p>
+                          {item.description && (
+                            <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>
+                          )}
+                        </div>
+
+                        {/* 3-button rating selector */}
+                        <div className="flex gap-1 shrink-0">
+                          {RATING_OPTIONS.map((rating) => {
+                            const isActive = response?.rating === rating;
+                            return (
+                              <button
+                                key={rating}
+                                type="button"
+                                disabled={response?.saving}
+                                onClick={() => handleRating(item.id, rating)}
+                                className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-colors ${
+                                  isActive
+                                    ? ""
+                                    : "bg-background text-muted-foreground border-border hover:border-foreground/30"
+                                }`}
+                                style={isActive ? AUDIT_RATING_STYLES[rating] : undefined}
+                              >
+                                {AUDIT_RATING_LABELS[rating]}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {response !== undefined && (
+                        <div className="mt-3 space-y-2">
+                          <Textarea
+                            placeholder="Notes (optional)"
+                            rows={2}
+                            value={response.notes}
+                            onChange={(e) =>
+                              setResponses((prev) => ({
+                                ...prev,
+                                [item.id]: { ...prev[item.id], notes: e.target.value },
+                              }))
+                            }
+                            onBlur={() => handleNotesBlur(item.id)}
+                          />
+
+                          {responseId && (
+                            <AuditEvidenceUploader
+                              auditResponseId={responseId}
+                              evidence={evidence}
+                              onEvidenceChange={(ev) => handleEvidenceChange(responseId, ev)}
+                            />
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0 pt-0.5">
-                  {response !== undefined && (
-                    <span className={`text-xs font-medium ${response.passed ? "text-green-600" : "text-red-600"}`}>
-                      {response.passed ? "Pass" : "Fail"}
-                    </span>
-                  )}
-                  <Switch
-                    checked={response?.passed ?? false}
-                    onCheckedChange={(checked) => handleToggle(item.id, checked)}
-                    disabled={response?.saving}
-                  />
-                </div>
-              </div>
-            </CardContent>
+                  );
+                })}
+              </CardContent>
+            )}
           </Card>
         );
       })}
@@ -253,13 +330,13 @@ export function AuditChecklist({
           </div>
           <Button
             onClick={handleComplete}
-            disabled={isPending || answeredCount < items.length}
+            disabled={isPending || answeredCount < totalItems}
             className="w-full"
           >
             {isPending
               ? "Completing..."
-              : answeredCount < items.length
-                ? `Answer all items to complete (${items.length - answeredCount} remaining)`
+              : answeredCount < totalItems
+                ? `Rate all items to complete (${totalItems - answeredCount} remaining)`
                 : "Complete Audit"}
           </Button>
         </CardContent>

@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { ActionResult } from "@/lib/types";
 import {
-  financialSettingsSchema,
-  type FinancialSettingsValues,
+  generalSettingsSchema,
+  type GeneralSettingsValues,
 } from "@/lib/validations/settings";
 
 async function verifyAdmin() {
@@ -100,10 +100,10 @@ export async function getFinancialSettings(): Promise<
   return { data: settings, error: null };
 }
 
-export async function saveFinancialSettings(
-  values: FinancialSettingsValues,
+export async function saveGeneralSettings(
+  values: GeneralSettingsValues,
 ): Promise<ActionResult<null>> {
-  const parsed = financialSettingsSchema.safeParse(values);
+  const parsed = generalSettingsSchema.safeParse(values);
   if (!parsed.success) {
     return {
       data: null,
@@ -115,13 +115,12 @@ export async function saveFinancialSettings(
   if (!supabase) return { data: null, error: "Unauthorized." };
 
   const rows = Object.entries({
-    tax_rate: String(parsed.data.tax_rate),
-    currency: parsed.data.currency,
-    payment_terms: parsed.data.payment_terms ?? "",
-    company_name: parsed.data.company_name ?? "",
-    company_address: parsed.data.company_address ?? "",
-    company_phone: parsed.data.company_phone ?? "",
-    company_email: parsed.data.company_email ?? "",
+    hst_rate: String(parsed.data.hst_rate),
+    ad_royalties_fee: String(parsed.data.ad_royalties_fee),
+    commissary_name: parsed.data.commissary_name ?? "",
+    commissary_address: parsed.data.commissary_address ?? "",
+    commissary_postal_code: parsed.data.commissary_postal_code ?? "",
+    commissary_phone: parsed.data.commissary_phone ?? "",
   }).map(([key, value]) => ({
     key,
     value,
@@ -135,7 +134,7 @@ export async function saveFinancialSettings(
   if (error) {
     return {
       data: null,
-      error: "Failed to save financial settings. Please try again.",
+      error: "Failed to save settings. Please try again.",
     };
   }
 

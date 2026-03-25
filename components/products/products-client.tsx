@@ -132,7 +132,7 @@ export function ProductsClient({ products, categories, isAdmin }: ProductsClient
                     <div>
                       <span className="text-sm font-medium">{product.name}</span>
                       <p className="text-xs text-muted-foreground">
-                        {formatPrice(product.price)} &middot; {product.unit_of_measure} &middot; {product.category_name}
+                        {formatPrice(product.price)} &middot; {product.modifier} &middot; {product.category_name}
                       </p>
                     </div>
                   </div>

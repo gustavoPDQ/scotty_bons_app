@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import type { AuditTemplateRow, AuditTemplateItemRow } from "@/lib/types";
+import type { AuditTemplateRow, AuditTemplateCategoryRow, AuditTemplateItemRow } from "@/lib/types";
 import { TemplatesClient } from "@/components/audits/templates-client";
 
 export default async function AuditTemplatesPage() {
@@ -50,20 +50,29 @@ export default async function AuditTemplatesPage() {
     });
   }
 
-  // Fetch all template items for editing
+  // Fetch all categories and items for editing
+  let allCategories: AuditTemplateCategoryRow[] = [];
   let allItems: AuditTemplateItemRow[] = [];
   if (templateIds.length > 0) {
-    const { data: itemsData } = await supabase
-      .from("audit_template_items")
-      .select("id, template_id, label, sort_order, created_at")
-      .in("template_id", templateIds)
-      .order("sort_order");
+    const [{ data: categoriesData }, { data: itemsData }] = await Promise.all([
+      supabase
+        .from("audit_template_categories")
+        .select("id, template_id, name, sort_order, created_at")
+        .in("template_id", templateIds)
+        .order("sort_order"),
+      supabase
+        .from("audit_template_items")
+        .select("id, template_id, category_id, label, description, sort_order, created_at")
+        .in("template_id", templateIds)
+        .order("sort_order"),
+    ]);
+    allCategories = (categoriesData ?? []) as AuditTemplateCategoryRow[];
     allItems = (itemsData ?? []) as AuditTemplateItemRow[];
   }
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
-      <TemplatesClient templates={templates} allItems={allItems} />
+      <TemplatesClient templates={templates} allCategories={allCategories} allItems={allItems} />
     </div>
   );
 }

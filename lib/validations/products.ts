@@ -24,11 +24,11 @@ export const createProductSchema = z.object({
     .number({ error: "Price must be a number." })
     .positive("Price must be greater than zero.")
     .max(99999999.99, "Price must be at most 99,999,999.99."),
-  unit_of_measure: z
+  modifier: z
     .string()
     .trim()
-    .min(1, "Unit of measure is required.")
-    .max(50, "Unit of measure must be at most 50 characters."),
+    .min(1, "Modifier is required.")
+    .max(50, "Modifier must be at most 50 characters."),
   category_id: z.string().uuid("Invalid category."),
 });
 

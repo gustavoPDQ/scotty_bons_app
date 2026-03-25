@@ -10,14 +10,10 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { AUDIT_STATUS_LABELS } from "@/lib/constants/audit-status";
-import type { AuditStatus } from "@/lib/types";
 import { X } from "lucide-react";
 
-const ALL_STATUSES: AuditStatus[] = ["draft", "completed"];
-
 interface AuditFiltersProps {
-  role: "admin" | "factory" | "store";
+  role: "admin" | "commissary" | "store";
   stores: { id: string; name: string }[];
 }
 
@@ -69,11 +65,8 @@ export function AuditFilters({ role, stores }: AuditFiltersProps) {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All</SelectItem>
-            {ALL_STATUSES.map((s) => (
-              <SelectItem key={s} value={s}>
-                {AUDIT_STATUS_LABELS[s]}
-              </SelectItem>
-            ))}
+            <SelectItem value="in_progress">In Progress</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
           </SelectContent>
         </Select>
       </div>

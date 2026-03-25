@@ -19,7 +19,7 @@ export default async function ProductsPage() {
     .eq("user_id", user.id)
     .single();
 
-  if (profile?.role === "factory") redirect("/orders");
+  if (profile?.role === "commissary") redirect("/orders");
 
   const isAdmin = profile?.role === "admin";
 
@@ -30,7 +30,7 @@ export default async function ProductsPage() {
 
   const { data: productsRaw, error: productsError } = await supabase
     .from("products")
-    .select("id, name, price, unit_of_measure, category_id, image_url")
+    .select("id, name, price, modifier, category_id, image_url")
     .order("name");
 
   const queryError = categoriesError || productsError;
@@ -39,7 +39,7 @@ export default async function ProductsPage() {
     id: p.id,
     name: p.name,
     price: Number(p.price),
-    unit_of_measure: p.unit_of_measure,
+    modifier: p.modifier,
     category_id: p.category_id,
     image_url: p.image_url,
   }));

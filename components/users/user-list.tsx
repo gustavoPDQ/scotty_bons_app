@@ -40,7 +40,7 @@ interface UserListProps {
 
 const ROLE_LABELS: Record<UserRow["role"], string> = {
   admin: "Admin",
-  factory: "Factory",
+  commissary: "Commissary",
   store: "Store",
 };
 

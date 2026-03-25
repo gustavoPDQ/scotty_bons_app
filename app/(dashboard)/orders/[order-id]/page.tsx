@@ -2,14 +2,16 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft, Clock, AlertCircle, FileText } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatPrice } from "@/lib/utils";
-import { STATUS_COLORS, STATUS_LABELS } from "@/lib/constants/order-status";
+import { STATUS_STYLES, STATUS_LABELS } from "@/lib/constants/order-status";
 import type { OrderStatus } from "@/lib/types";
 import { OrderStatusActions } from "@/components/orders/order-status-actions";
 import { DeleteOrderButton } from "@/components/orders/delete-order-button";
+import { EditOrderButton } from "@/components/orders/edit-order-button";
 import { FulfillOrderButton } from "@/components/orders/fulfill-order-button";
 
 export default async function OrderDetailPage({
@@ -49,7 +51,7 @@ export default async function OrderDetailPage({
   // Fetch order items
   const { data: items } = await supabase
     .from("order_items")
-    .select("id, product_name, unit_of_measure, unit_price, quantity")
+    .select("id, product_name, modifier, unit_price, quantity")
     .eq("order_id", orderId)
     .order("created_at");
 
@@ -60,25 +62,44 @@ export default async function OrderDetailPage({
     .eq("order_id", orderId)
     .order("changed_at", { ascending: true });
 
-  // For admin/factory: fetch submitter name and store name
-  const isAdmin = profile.role === "admin" || profile.role === "factory";
+  // Resolve names for status history changed_by users
+  const changedByMap: Record<string, string> = {};
+  if (history && history.length > 0) {
+    const uniqueUserIds = [...new Set(history.map((h) => h.changed_by))];
+    const adminClient = createAdminClient();
+    const results = await Promise.all(
+      uniqueUserIds.map((uid) => adminClient.auth.admin.getUserById(uid))
+    );
+    for (const { data } of results) {
+      if (data?.user) {
+        const name =
+          (data.user.user_metadata?.name as string | undefined) ??
+          data.user.email ??
+          "";
+        if (name) changedByMap[data.user.id] = name;
+      }
+    }
+  }
+
+  // For admin/commissary: fetch submitter name and store name
+  const isAdmin = profile.role === "admin" || profile.role === "commissary";
   let submitterName: string | null = null;
   let storeName: string | null = null;
 
   if (isAdmin) {
-    const [{ data: submitter }, { data: store }] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select("full_name")
-        .eq("user_id", order.submitted_by)
-        .single(),
+    const adminClient = createAdminClient();
+    const [{ data: submitterAuth }, { data: store }] = await Promise.all([
+      adminClient.auth.admin.getUserById(order.submitted_by),
       supabase
         .from("stores")
         .select("name")
         .eq("id", order.store_id)
         .single(),
     ]);
-    submitterName = submitter?.full_name ?? null;
+    submitterName =
+      (submitterAuth?.user?.user_metadata?.name as string | undefined) ??
+      submitterAuth?.user?.email ??
+      null;
     storeName = store?.name ?? null;
   }
 
@@ -131,8 +152,13 @@ export default async function OrderDetailPage({
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Order #{order.id.slice(0, 8)}</h1>
         <div className="flex items-center gap-3">
-          <Badge className={STATUS_COLORS[status]}>{STATUS_LABELS[status]}</Badge>
+          <Badge variant="status" style={STATUS_STYLES[status]}>{STATUS_LABELS[status]}</Badge>
           <OrderStatusActions
+            orderId={order.id}
+            currentStatus={status}
+            role={profile.role}
+          />
+          <EditOrderButton
             orderId={order.id}
             currentStatus={status}
             role={profile.role}
@@ -228,7 +254,7 @@ export default async function OrderDetailPage({
               <thead>
                 <tr className="border-b text-left">
                   <th className="pb-2 font-medium">Product Name</th>
-                  <th className="pb-2 font-medium">Unit</th>
+                  <th className="pb-2 font-medium">Modifier</th>
                   <th className="pb-2 font-medium text-right">Unit Price</th>
                   <th className="pb-2 font-medium text-right">Qty</th>
                   <th className="pb-2 font-medium text-right">Line Total</th>
@@ -241,7 +267,7 @@ export default async function OrderDetailPage({
                     <tr key={item.id}>
                       <td className="py-2">{item.product_name}</td>
                       <td className="py-2 text-muted-foreground">
-                        {item.unit_of_measure}
+                        {item.modifier}
                       </td>
                       <td className="py-2 text-right">
                         {formatPrice(Number(item.unit_price))}
@@ -287,13 +313,20 @@ export default async function OrderDetailPage({
                     <span className="absolute -left-1.5 mt-1.5 size-3 rounded-full border-2 border-background bg-muted-foreground/50" />
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge
-                        className={`${STATUS_COLORS[entryStatus]} text-xs`}
+                        variant="status"
+                        style={STATUS_STYLES[entryStatus]}
+                        className="text-xs"
                       >
                         {STATUS_LABELS[entryStatus]}
                       </Badge>
                       <span className="text-xs text-muted-foreground">
                         {formatDate(entry.changed_at)}
                       </span>
+                      {changedByMap[entry.changed_by] && (
+                        <span className="text-xs text-muted-foreground">
+                          by {changedByMap[entry.changed_by]}
+                        </span>
+                      )}
                     </div>
                   </li>
                 );

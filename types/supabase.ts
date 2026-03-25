@@ -104,7 +104,7 @@ export type Database = {
       auth_store_id: { Args: never; Returns: string }
     }
     Enums: {
-      user_role: "admin" | "factory" | "store"
+      user_role: "admin" | "commissary" | "store"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -235,7 +235,7 @@ export const Constants = {
   },
   public: {
     Enums: {
-      user_role: ["admin", "factory", "store"],
+      user_role: ["admin", "commissary", "store"],
     },
   },
 } as const

@@ -30,7 +30,7 @@ export default async function NewOrderPage() {
       .order("name"),
     supabase
       .from("products")
-      .select("id, name, price, unit_of_measure, category_id, image_url")
+      .select("id, name, price, modifier, category_id, image_url")
       .order("name"),
   ]);
 
@@ -44,7 +44,7 @@ export default async function NewOrderPage() {
     id: p.id,
     name: p.name,
     price: Number(p.price),
-    unit_of_measure: p.unit_of_measure,
+    modifier: p.modifier,
     category_id: p.category_id,
     image_url: p.image_url,
   }));

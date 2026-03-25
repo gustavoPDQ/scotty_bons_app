@@ -8,6 +8,31 @@ import {
   type CreateOrderValues,
 } from "@/lib/validations/orders";
 
+export async function getOrderItemsForOrders(
+  orderIds: string[]
+): Promise<ActionResult<{ order_id: string; product_name: string; modifier: string; unit_price: number; quantity: number }[]>> {
+  if (!orderIds.length || orderIds.length > 50) {
+    return { data: null, error: "Invalid selection." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { data: null, error: "Unauthorized." };
+
+  const { data, error } = await supabase
+    .from("order_items")
+    .select("order_id, product_name, modifier, unit_price, quantity")
+    .in("order_id", orderIds);
+
+  if (error) {
+    return { data: null, error: "Failed to load order items." };
+  }
+
+  return { data: data ?? [], error: null };
+}
+
 export async function createOrder(
   values: CreateOrderValues
 ): Promise<ActionResult<{ id: string }>> {

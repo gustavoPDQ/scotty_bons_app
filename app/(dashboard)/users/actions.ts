@@ -216,8 +216,15 @@ export async function createStore(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("stores")
-    .insert({ name: parsed.data.name })
-    .select("id, name")
+    .insert({
+      name: parsed.data.name,
+      business_name: parsed.data.business_name ?? "",
+      address: parsed.data.address ?? "",
+      postal_code: parsed.data.postal_code ?? "",
+      phone: parsed.data.phone ?? "",
+      email: parsed.data.email ?? "",
+    })
+    .select("id, name, business_name, address, postal_code, phone, email")
     .single();
 
   if (error) return { data: null, error: "Failed to create store. Please try again." };
@@ -242,7 +249,14 @@ export async function updateStore(
   const supabase = await createClient();
   const { error } = await supabase
     .from("stores")
-    .update({ name: parsed.data.name })
+    .update({
+      name: parsed.data.name,
+      business_name: parsed.data.business_name ?? "",
+      address: parsed.data.address ?? "",
+      postal_code: parsed.data.postal_code ?? "",
+      phone: parsed.data.phone ?? "",
+      email: parsed.data.email ?? "",
+    })
     .eq("id", storeId);
 
   if (error) return { data: null, error: "Failed to update store. Please try again." };

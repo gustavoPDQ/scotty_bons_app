@@ -56,28 +56,50 @@ export async function createTemplate(
     return { data: null, error: "Failed to create template. Please try again." };
   }
 
-  // Insert items
-  const items = parsed.data.items.map((item, index) => ({
-    template_id: template.id,
-    label: item.label,
-    sort_order: index,
-  }));
+  // Insert categories and items
+  let totalItemCount = 0;
+  for (let catIdx = 0; catIdx < parsed.data.categories.length; catIdx++) {
+    const cat = parsed.data.categories[catIdx];
+    const { data: category, error: catError } = await supabase
+      .from("audit_template_categories")
+      .insert({
+        template_id: template.id,
+        name: cat.name,
+        sort_order: catIdx,
+      })
+      .select("id")
+      .single();
 
-  const { error: itemsError } = await supabase
-    .from("audit_template_items")
-    .insert(items);
+    if (catError || !category) {
+      await supabase.from("audit_templates").delete().eq("id", template.id);
+      return { data: null, error: "Failed to create template categories. Please try again." };
+    }
 
-  if (itemsError) {
-    // Clean up template if items failed
-    await supabase.from("audit_templates").delete().eq("id", template.id);
-    return { data: null, error: "Failed to create template items. Please try again." };
+    const items = cat.items.map((item, itemIdx) => ({
+      template_id: template.id,
+      category_id: category.id,
+      label: item.label,
+      description: item.description ?? null,
+      sort_order: itemIdx,
+    }));
+
+    const { error: itemsError } = await supabase
+      .from("audit_template_items")
+      .insert(items);
+
+    if (itemsError) {
+      await supabase.from("audit_templates").delete().eq("id", template.id);
+      return { data: null, error: "Failed to create template items. Please try again." };
+    }
+
+    totalItemCount += cat.items.length;
   }
 
   revalidatePath("/audits/templates");
   return {
     data: {
       ...template,
-      item_count: parsed.data.items.length,
+      item_count: totalItemCount,
     } as AuditTemplateRow,
     error: null,
   };
@@ -118,24 +140,44 @@ export async function updateTemplate(
     return { data: null, error: "Failed to update template. Please try again." };
   }
 
-  // Delete old items, insert new ones
+  // Delete old categories (cascades to items)
   await supabase
-    .from("audit_template_items")
+    .from("audit_template_categories")
     .delete()
     .eq("template_id", templateId);
 
-  const items = parsed.data.items.map((item, index) => ({
-    template_id: templateId,
-    label: item.label,
-    sort_order: index,
-  }));
+  // Insert new categories and items
+  for (let catIdx = 0; catIdx < parsed.data.categories.length; catIdx++) {
+    const cat = parsed.data.categories[catIdx];
+    const { data: category, error: catError } = await supabase
+      .from("audit_template_categories")
+      .insert({
+        template_id: templateId,
+        name: cat.name,
+        sort_order: catIdx,
+      })
+      .select("id")
+      .single();
 
-  const { error: itemsError } = await supabase
-    .from("audit_template_items")
-    .insert(items);
+    if (catError || !category) {
+      return { data: null, error: "Failed to update template categories. Please try again." };
+    }
 
-  if (itemsError) {
-    return { data: null, error: "Failed to update template items. Please try again." };
+    const items = cat.items.map((item, itemIdx) => ({
+      template_id: templateId,
+      category_id: category.id,
+      label: item.label,
+      description: item.description ?? null,
+      sort_order: itemIdx,
+    }));
+
+    const { error: itemsError } = await supabase
+      .from("audit_template_items")
+      .insert(items);
+
+    if (itemsError) {
+      return { data: null, error: "Failed to update template items. Please try again." };
+    }
   }
 
   revalidatePath("/audits/templates");

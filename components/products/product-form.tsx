@@ -53,7 +53,7 @@ export function ProductForm({ categories, product, onSuccess }: ProductFormProps
     defaultValues: {
       name: product?.name ?? "",
       price: product?.price ?? 0,
-      unit_of_measure: product?.unit_of_measure ?? "",
+      modifier: product?.modifier ?? "",
       category_id: product?.category_id ?? "",
     },
   });
@@ -167,10 +167,10 @@ export function ProductForm({ categories, product, onSuccess }: ProductFormProps
 
         <FormField
           control={form.control}
-          name="unit_of_measure"
+          name="modifier"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Unit of Measure</FormLabel>
+              <FormLabel>Modifier</FormLabel>
               <FormControl>
                 <Input placeholder="e.g. box, unit, kg" {...field} />
               </FormControl>

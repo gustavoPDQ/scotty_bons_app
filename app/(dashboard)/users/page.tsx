@@ -69,7 +69,7 @@ export default async function UsersPage({
   // Fetch all stores for the dropdowns — use adminClient to bypass RLS on stores table
   const { data: stores } = await adminClient
     .from("stores")
-    .select("id, name")
+    .select("id, name, business_name, address, postal_code, phone, email")
     .order("name");
 
   return (

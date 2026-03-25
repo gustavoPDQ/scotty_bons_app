@@ -2,7 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import type { AuditTemplateItemRow, AuditResponseRow, AuditEvidenceRow } from "@/lib/types";
+import type {
+  AuditTemplateCategoryRow,
+  AuditTemplateItemRow,
+  AuditResponseRow,
+  AuditEvidenceRow,
+} from "@/lib/types";
 import { AuditChecklist } from "@/components/audits/audit-checklist";
 
 export default async function ConductAuditPage({
@@ -24,38 +29,45 @@ export default async function ConductAuditPage({
     .eq("user_id", user.id)
     .single();
 
-  if (!profile || profile.role !== "admin") redirect("/audits");
+  if (!profile || (profile.role !== "admin" && profile.role !== "commissary")) redirect("/audits");
 
   // Fetch audit
   const { data: audit } = await supabase
     .from("audits")
-    .select("id, template_id, store_id, status")
+    .select("id, template_id, store_id, conducted_at")
     .eq("id", auditId)
     .single();
 
   if (!audit) redirect("/audits");
-  if (audit.status !== "draft") redirect(`/audits/${auditId}`);
+  if (audit.conducted_at) redirect(`/audits/${auditId}`);
 
   // Fetch related data in parallel
   const [
     { data: store },
     { data: template },
+    { data: templateCategories },
     { data: templateItems },
     { data: responses },
   ] = await Promise.all([
     supabase.from("stores").select("name").eq("id", audit.store_id).single(),
     supabase.from("audit_templates").select("name").eq("id", audit.template_id).single(),
     supabase
+      .from("audit_template_categories")
+      .select("id, template_id, name, sort_order, created_at")
+      .eq("template_id", audit.template_id)
+      .order("sort_order"),
+    supabase
       .from("audit_template_items")
-      .select("id, template_id, label, sort_order, created_at")
+      .select("id, template_id, category_id, label, description, sort_order, created_at")
       .eq("template_id", audit.template_id)
       .order("sort_order"),
     supabase
       .from("audit_responses")
-      .select("id, audit_id, template_item_id, passed, notes")
+      .select("id, audit_id, template_item_id, rating, notes")
       .eq("audit_id", auditId),
   ]);
 
+  const categories = (templateCategories ?? []) as AuditTemplateCategoryRow[];
   const items = (templateItems ?? []) as AuditTemplateItemRow[];
   const responseList = (responses ?? []) as AuditResponseRow[];
 
@@ -98,6 +110,7 @@ export default async function ConductAuditPage({
 
       <AuditChecklist
         auditId={auditId}
+        categories={categories}
         items={items}
         existingResponses={responseList}
         existingEvidence={evidenceList}

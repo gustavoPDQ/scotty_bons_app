@@ -17,14 +17,13 @@ import { Search, X } from "lucide-react";
 
 const ALL_STATUSES: OrderStatus[] = [
   "submitted",
-  "under_review",
   "approved",
   "declined",
   "fulfilled",
 ];
 
 interface OrderFiltersProps {
-  role: "admin" | "factory" | "store";
+  role: "admin" | "commissary" | "store";
   stores: { id: string; name: string }[];
 }
 

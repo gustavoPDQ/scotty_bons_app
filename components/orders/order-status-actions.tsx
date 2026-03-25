@@ -32,7 +32,7 @@ export function OrderStatusActions({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [reason, setReason] = useState("");
 
-  if (role !== "admin" || TERMINAL_STATUSES.includes(currentStatus)) {
+  if (!["admin", "commissary"].includes(role) || TERMINAL_STATUSES.includes(currentStatus)) {
     return null;
   }
 
@@ -43,7 +43,6 @@ export function OrderStatusActions({
         toast.error(result.error);
       } else {
         const labels: Record<string, string> = {
-          under_review: "Order placed under review.",
           approved: "Order approved.",
         };
         toast.success(labels[newStatus] ?? "Order status updated.");
@@ -69,16 +68,6 @@ export function OrderStatusActions({
   return (
     <>
       <div className="flex items-center gap-2">
-        {currentStatus === "submitted" && (
-          <Button
-            variant="outline"
-            className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-400 dark:hover:bg-amber-950"
-            disabled={isPending}
-            onClick={() => handleAction("under_review")}
-          >
-            Place Under Review
-          </Button>
-        )}
         <Button
           variant="outline"
           className="border-green-500 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-950"

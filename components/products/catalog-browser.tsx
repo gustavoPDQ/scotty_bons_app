@@ -133,7 +133,7 @@ export function CatalogBrowser({ categories, products }: CatalogBrowserProps) {
                     <div>
                       <span className="text-sm font-medium">{product.name}</span>
                       <p className="text-xs text-muted-foreground">
-                        {formatPrice(product.price)} &middot; {product.unit_of_measure}
+                        {formatPrice(product.price)} &middot; {product.modifier}
                       </p>
                     </div>
                   </div>

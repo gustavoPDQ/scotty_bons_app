@@ -12,8 +12,8 @@ import {
   type CompleteAuditValues,
 } from "@/lib/validations/audits";
 
-/** Verifies the current session belongs to an admin. Returns the supabase client and user id, or null. */
-async function verifyAdmin() {
+/** Verifies the current session belongs to an admin or commissary. Returns the supabase client and user id, or null. */
+async function verifyAdminOrCommissary() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -26,7 +26,8 @@ async function verifyAdmin() {
     .eq("user_id", user.id)
     .single();
 
-  return profile?.role === "admin" ? { supabase, userId: user.id } : null;
+  if (profile?.role !== "admin" && profile?.role !== "commissary") return null;
+  return { supabase, userId: user.id };
 }
 
 export async function createAudit(
@@ -37,7 +38,7 @@ export async function createAudit(
     return { data: null, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
-  const auth = await verifyAdmin();
+  const auth = await verifyAdminOrCommissary();
   if (!auth) return { data: null, error: "Unauthorized." };
 
   const { data, error } = await auth.supabase
@@ -69,7 +70,7 @@ export async function saveAuditResponse(
     return { data: null, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
-  const auth = await verifyAdmin();
+  const auth = await verifyAdminOrCommissary();
   if (!auth) return { data: null, error: "Unauthorized." };
 
   // Upsert response on conflict (audit_id, template_item_id)
@@ -79,7 +80,7 @@ export async function saveAuditResponse(
       {
         audit_id: parsed.data.audit_id,
         template_item_id: parsed.data.template_item_id,
-        passed: parsed.data.passed,
+        rating: parsed.data.rating,
         notes: parsed.data.notes ?? null,
       },
       { onConflict: "audit_id,template_item_id" }
@@ -102,18 +103,18 @@ export async function completeAudit(
     return { data: null, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
-  const auth = await verifyAdmin();
+  const auth = await verifyAdminOrCommissary();
   if (!auth) return { data: null, error: "Unauthorized." };
 
   // Fetch audit to get template_id
   const { data: audit } = await auth.supabase
     .from("audits")
-    .select("id, template_id, status")
+    .select("id, template_id, conducted_at")
     .eq("id", parsed.data.audit_id)
     .single();
 
   if (!audit) return { data: null, error: "Audit not found." };
-  if (audit.status === "completed") {
+  if (audit.conducted_at) {
     return { data: null, error: "Audit is already completed." };
   }
 
@@ -140,26 +141,29 @@ export async function completeAudit(
     };
   }
 
-  // Compute score: % of passed items
-  const { count: passedCount } = await auth.supabase
+  // Compute weighted score: poor=0, satisfactory=0.5, good=1
+  const { data: allResponses } = await auth.supabase
     .from("audit_responses")
-    .select("id", { count: "exact", head: true })
-    .eq("audit_id", audit.id)
-    .eq("passed", true);
+    .select("rating")
+    .eq("audit_id", audit.id);
 
+  const ratingWeights: Record<string, number> = { poor: 0, satisfactory: 0.5, good: 1 };
+  const sumWeights = (allResponses ?? []).reduce(
+    (sum, r) => sum + (ratingWeights[r.rating] ?? 0),
+    0
+  );
   const score =
-    totalItems > 0 ? Math.round(((passedCount ?? 0) / totalItems) * 10000) / 100 : 0;
+    totalItems > 0 ? Math.round((sumWeights / totalItems) * 10000) / 100 : 0;
 
   const { error } = await auth.supabase
     .from("audits")
     .update({
-      status: "completed",
       score,
       notes: parsed.data.notes ?? null,
       conducted_at: new Date().toISOString(),
     })
     .eq("id", audit.id)
-    .eq("status", "draft");
+    .is("conducted_at", null);
 
   if (error) {
     return { data: null, error: "Failed to complete audit. Please try again." };

@@ -1,18 +1,23 @@
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, CheckCircle2, XCircle, Pencil } from "lucide-react";
+import { ArrowLeft, Pencil } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  AUDIT_STATUS_COLORS,
-  AUDIT_STATUS_LABELS,
+  AUDIT_RATING_LABELS,
+  AUDIT_RATING_STYLES,
   getScoreColor,
   getScoreLabel,
 } from "@/lib/constants/audit-status";
-import type { AuditStatus, AuditTemplateItemRow, AuditResponseRow, AuditEvidenceRow } from "@/lib/types";
+import type {
+  AuditTemplateCategoryRow,
+  AuditTemplateItemRow,
+  AuditResponseRow,
+  AuditEvidenceRow,
+} from "@/lib/types";
 
 export default async function AuditDetailPage({
   params,
@@ -35,24 +40,25 @@ export default async function AuditDetailPage({
   if (!profile) redirect("/login");
 
   const role = profile.role;
-  const isAdmin = role === "admin";
+  const canConduct = role === "admin" || role === "commissary";
 
   // Fetch audit
   const { data: audit } = await supabase
     .from("audits")
-    .select("id, template_id, store_id, conducted_by, status, score, notes, conducted_at, created_at, updated_at")
+    .select("id, template_id, store_id, conducted_by, score, notes, conducted_at, created_at, updated_at")
     .eq("id", auditId)
     .single();
 
   if (!audit) redirect("/audits");
 
-  const status = audit.status as AuditStatus;
+  const isCompleted = !!audit.conducted_at;
 
   // Fetch related data in parallel
   const [
     { data: store },
     { data: template },
     { data: conductor },
+    { data: templateCategories },
     { data: templateItems },
     { data: responses },
   ] = await Promise.all([
@@ -60,21 +66,35 @@ export default async function AuditDetailPage({
     supabase.from("audit_templates").select("name").eq("id", audit.template_id).single(),
     supabase.from("profiles").select("full_name").eq("user_id", audit.conducted_by).single(),
     supabase
+      .from("audit_template_categories")
+      .select("id, template_id, name, sort_order, created_at")
+      .eq("template_id", audit.template_id)
+      .order("sort_order"),
+    supabase
       .from("audit_template_items")
-      .select("id, template_id, label, sort_order, created_at")
+      .select("id, template_id, category_id, label, description, sort_order, created_at")
       .eq("template_id", audit.template_id)
       .order("sort_order"),
     supabase
       .from("audit_responses")
-      .select("id, audit_id, template_item_id, passed, notes")
+      .select("id, audit_id, template_item_id, rating, notes")
       .eq("audit_id", auditId),
   ]);
 
+  const categories = (templateCategories ?? []) as AuditTemplateCategoryRow[];
   const items = (templateItems ?? []) as AuditTemplateItemRow[];
   const responseList = (responses ?? []) as AuditResponseRow[];
   const responseMap: Record<string, AuditResponseRow> = {};
   for (const r of responseList) {
     responseMap[r.template_item_id] = r;
+  }
+
+  // Group items by category
+  const itemsByCategory: Record<string, AuditTemplateItemRow[]> = {};
+  for (const cat of categories) {
+    itemsByCategory[cat.id] = items
+      .filter((i) => i.category_id === cat.id)
+      .sort((a, b) => a.sort_order - b.sort_order);
   }
 
   // Fetch evidence for all responses
@@ -100,7 +120,11 @@ export default async function AuditDetailPage({
       timeStyle: "short",
     }).format(new Date(timestamp));
 
-  const passedCount = responseList.filter((r) => r.passed).length;
+  // Rating summary
+  const ratingCounts = { good: 0, satisfactory: 0, poor: 0 };
+  for (const r of responseList) {
+    ratingCounts[r.rating]++;
+  }
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -123,10 +147,17 @@ export default async function AuditDetailPage({
           {template?.name ?? "Audit"} — {store?.name ?? "Unknown Store"}
         </h1>
         <div className="flex items-center gap-3">
-          <Badge className={AUDIT_STATUS_COLORS[status]}>
-            {AUDIT_STATUS_LABELS[status]}
+          <Badge
+            variant="status"
+            style={
+              isCompleted
+                ? { backgroundColor: "#15803d", color: "#fff", borderColor: "transparent" }
+                : { backgroundColor: "#d97706", color: "#fff", borderColor: "transparent" }
+            }
+          >
+            {isCompleted ? "Completed" : "In Progress"}
           </Badge>
-          {isAdmin && status === "draft" && (
+          {canConduct && !isCompleted && (
             <Button asChild size="sm">
               <Link href={`/audits/${auditId}/conduct`}>
                 <Pencil className="size-4 mr-2" />
@@ -164,7 +195,7 @@ export default async function AuditDetailPage({
       </Card>
 
       {/* Score card */}
-      {status === "completed" && audit.score !== null && (
+      {isCompleted && audit.score !== null && (
         <Card className={`border ${getScoreColor(audit.score)}`}>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -175,7 +206,7 @@ export default async function AuditDetailPage({
               <div className="text-right">
                 <p className="text-lg font-semibold">{getScoreLabel(audit.score)}</p>
                 <p className="text-sm text-muted-foreground">
-                  {passedCount} of {items.length} items passed
+                  {ratingCounts.good} good · {ratingCounts.satisfactory} satisfactory · {ratingCounts.poor} poor
                 </p>
               </div>
             </div>
@@ -195,69 +226,111 @@ export default async function AuditDetailPage({
         </Card>
       )}
 
-      {/* Checklist results */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Checklist Items</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {items.length === 0 ? (
+      {/* Checklist results grouped by category */}
+      {categories.length === 0 && items.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center">
             <p className="text-sm text-muted-foreground">No checklist items found.</p>
-          ) : (
-            <div className="space-y-3">
-              {items.map((item) => {
-                const response = responseMap[item.id];
-                const evidence = response ? (evidenceMap[response.id] ?? []) : [];
-                return (
-                  <div key={item.id} className="border rounded-lg p-3">
-                    <div className="flex items-start gap-3">
-                      {response ? (
-                        response.passed ? (
-                          <CheckCircle2 className="size-5 text-green-600 shrink-0 mt-0.5" />
-                        ) : (
-                          <XCircle className="size-5 text-red-600 shrink-0 mt-0.5" />
-                        )
-                      ) : (
-                        <div className="size-5 rounded-full border-2 border-muted-foreground/30 shrink-0 mt-0.5" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">{item.label}</p>
-                        {response?.notes && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {response.notes}
-                          </p>
-                        )}
-                        {evidence.length > 0 && (
-                          <div className="flex gap-2 mt-2 flex-wrap">
-                            {evidence.map((e) => (
-                              <a
-                                key={e.id}
-                                href={e.image_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block"
-                              >
-                                <Image
-                                  src={e.image_url}
-                                  alt={e.caption ?? "Evidence"}
-                                  width={64}
-                                  height={64}
-                                  className="size-16 object-cover rounded border hover:opacity-80 transition-opacity"
-                                  unoptimized
-                                />
-                              </a>
-                            ))}
-                          </div>
-                        )}
+          </CardContent>
+        </Card>
+      ) : (
+        categories.map((cat) => {
+          const catItems = itemsByCategory[cat.id] ?? [];
+          if (catItems.length === 0) return null;
+
+          return (
+            <Card key={cat.id}>
+              <CardHeader className="py-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">{cat.name}</CardTitle>
+                  {(() => {
+                    const ratedItems = catItems.filter((i) => responseMap[i.id]);
+                    if (ratedItems.length === 0) return null;
+                    const ratingValues = { good: 2, satisfactory: 1, poor: 0 };
+                    const total = ratedItems.reduce(
+                      (sum, i) => sum + ratingValues[responseMap[i.id].rating],
+                      0
+                    );
+                    const maxScore = ratedItems.length * 2;
+                    const pct = Math.round((total / maxScore) * 100);
+                    const good = ratedItems.filter((i) => responseMap[i.id].rating === "good").length;
+                    const satisfactory = ratedItems.filter((i) => responseMap[i.id].rating === "satisfactory").length;
+                    const poor = ratedItems.filter((i) => responseMap[i.id].rating === "poor").length;
+                    return (
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="text-muted-foreground">
+                          {good} good · {satisfactory} satisfactory · {poor} poor
+                        </span>
+                        <span className={`font-semibold px-2 py-0.5 rounded border ${getScoreColor(pct)}`}>
+                          {pct}%
+                        </span>
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    );
+                  })()}
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="space-y-3">
+                  {catItems.map((item) => {
+                    const response = responseMap[item.id];
+                    const evidence = response ? (evidenceMap[response.id] ?? []) : [];
+                    return (
+                      <div key={item.id} className="border rounded-lg p-3">
+                        <div className="flex items-start gap-3">
+                          {response ? (
+                            <Badge
+                              variant="status"
+                              style={AUDIT_RATING_STYLES[response.rating]}
+                              className="shrink-0 mt-0.5 text-xs"
+                            >
+                              {AUDIT_RATING_LABELS[response.rating]}
+                            </Badge>
+                          ) : (
+                            <div className="size-5 rounded-full border-2 border-muted-foreground/30 shrink-0 mt-0.5" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium">{item.label}</p>
+                            {item.description && (
+                              <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>
+                            )}
+                            {response?.notes && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {response.notes}
+                              </p>
+                            )}
+                            {evidence.length > 0 && (
+                              <div className="flex gap-2 mt-2 flex-wrap">
+                                {evidence.map((e) => (
+                                  <a
+                                    key={e.id}
+                                    href={e.image_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="block"
+                                  >
+                                    <Image
+                                      src={e.image_url}
+                                      alt={e.caption ?? "Evidence"}
+                                      width={64}
+                                      height={64}
+                                      className="size-16 object-cover rounded border hover:opacity-80 transition-opacity"
+                                      unoptimized
+                                    />
+                                  </a>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })
+      )}
     </div>
   );
 }

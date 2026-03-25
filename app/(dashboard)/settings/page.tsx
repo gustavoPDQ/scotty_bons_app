@@ -44,7 +44,8 @@ export default async function SettingsPage() {
       </section>
 
       {isAdmin && (
-        <section className="space-y-4">
+        <section className="space-y-6">
+          <h2 className="text-lg font-semibold">General Settings</h2>
           <FinancialSettingsForm initialValues={financialSettings} />
         </section>
       )}

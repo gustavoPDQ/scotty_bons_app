@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { FileText } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatPrice } from "@/lib/utils";
+import { InvoiceFilters } from "@/components/invoices/invoice-filters";
+import { InvoiceListWithSelection } from "@/components/invoices/invoice-list-with-selection";
 
 const isValidDate = (d: string) =>
   /^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(Date.parse(d));
@@ -17,6 +17,7 @@ export default async function InvoicesPage({
     store_id?: string;
     from?: string;
     to?: string;
+    q?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -39,6 +40,16 @@ export default async function InvoicesPage({
   const role = profile.role;
   const isStore = role === "store";
 
+  // Fetch stores for filter dropdown (admin/commissary only)
+  let allStores: { id: string; name: string }[] = [];
+  if (!isStore) {
+    const { data: storesData } = await supabase
+      .from("stores")
+      .select("id, name")
+      .order("name");
+    allStores = storesData ?? [];
+  }
+
   // Build query with optional filters
   let query = supabase
     .from("invoices")
@@ -47,7 +58,7 @@ export default async function InvoicesPage({
     )
     .order("created_at", { ascending: false });
 
-  // Apply filters (admin/factory only)
+  // Apply filters (admin/commissary only)
   if (!isStore) {
     if (params.store_id && isValidUUID(params.store_id)) {
       query = query.eq("store_id", params.store_id);
@@ -58,6 +69,9 @@ export default async function InvoicesPage({
   }
   if (params.to && isValidDate(params.to)) {
     query = query.lte("created_at", params.to + "T23:59:59.999Z");
+  }
+  if (params.q && params.q.length <= 100) {
+    query = query.ilike("invoice_number", `%${params.q}%`);
   }
 
   const { data: invoices } = await query;
@@ -101,11 +115,22 @@ export default async function InvoicesPage({
     }
   }
 
-  const dateFmt = new Intl.DateTimeFormat("en-CA", { dateStyle: "medium" });
+  // Prepare serializable invoice data for client component
+  const invoiceData = invoiceList.map((invoice) => ({
+    id: invoice.id,
+    invoice_number: invoice.invoice_number,
+    store_id: invoice.store_id,
+    store_name: storeNames[invoice.store_id] ?? invoice.store_id.slice(0, 8),
+    order_date: orderDates[invoice.order_id] ?? undefined,
+    grand_total: Number(invoice.grand_total),
+    created_at: invoice.created_at,
+  }));
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <h1 className="text-2xl font-bold">Invoices</h1>
+
+      <InvoiceFilters role={role} stores={allStores} />
 
       {invoiceList.length === 0 ? (
         <Card>
@@ -118,40 +143,7 @@ export default async function InvoicesPage({
           </CardContent>
         </Card>
       ) : (
-        <div className="rounded-md border divide-y">
-          {invoiceList.map((invoice) => {
-            const storeName =
-              storeNames[invoice.store_id] ?? invoice.store_id.slice(0, 8);
-            const orderDate = orderDates[invoice.order_id];
-            return (
-              <Link
-                key={invoice.id}
-                href={`/invoices/${invoice.id}`}
-                className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-muted/50 transition-colors"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">
-                    {invoice.invoice_number}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {storeName}
-                    {orderDate
-                      ? ` · Order: ${dateFmt.format(new Date(orderDate))}`
-                      : ""}
-                  </p>
-                </div>
-                <div className="flex items-center gap-4 shrink-0 text-sm">
-                  <span className="font-medium">
-                    {formatPrice(Number(invoice.grand_total))}
-                  </span>
-                  <span className="text-muted-foreground">
-                    {dateFmt.format(new Date(invoice.created_at))}
-                  </span>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
+        <InvoiceListWithSelection invoices={invoiceData} />
       )}
     </div>
   );

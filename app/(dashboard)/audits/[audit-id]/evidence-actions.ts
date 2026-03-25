@@ -5,8 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import type { ActionResult, AuditEvidenceRow } from "@/lib/types";
 import { z } from "zod";
 
-/** Verifies the current session belongs to an admin. Returns the supabase client or null. */
-async function verifyAdmin() {
+/** Verifies the current session belongs to an admin or commissary. Returns the supabase client or null. */
+async function verifyAdminOrCommissary() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -19,7 +19,8 @@ async function verifyAdmin() {
     .eq("user_id", user.id)
     .single();
 
-  return profile?.role === "admin" ? supabase : null;
+  if (profile?.role !== "admin" && profile?.role !== "commissary") return null;
+  return supabase;
 }
 
 const idSchema = z.string().uuid("Invalid ID.");
@@ -34,7 +35,7 @@ export async function uploadAuditEvidence(
   const idParsed = idSchema.safeParse(auditResponseId);
   if (!idParsed.success) return { data: null, error: "Invalid response ID." };
 
-  const supabase = await verifyAdmin();
+  const supabase = await verifyAdminOrCommissary();
   if (!supabase) return { data: null, error: "Unauthorized." };
 
   const file = formData.get("file") as File | null;
@@ -112,7 +113,7 @@ export async function removeAuditEvidence(
   const idParsed = idSchema.safeParse(evidenceId);
   if (!idParsed.success) return { data: null, error: "Invalid evidence ID." };
 
-  const supabase = await verifyAdmin();
+  const supabase = await verifyAdminOrCommissary();
   if (!supabase) return { data: null, error: "Unauthorized." };
 
   // Fetch to get file path

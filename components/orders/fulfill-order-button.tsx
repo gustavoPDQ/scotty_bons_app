@@ -31,7 +31,7 @@ export function FulfillOrderButton({
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  if (role !== "factory" || currentStatus !== "approved") {
+  if (!["admin", "commissary"].includes(role) || currentStatus !== "approved") {
     return null;
   }
 

@@ -17,7 +17,7 @@ import { createOrder } from "@/app/(dashboard)/orders/actions";
 type CartItem = {
   product_id: string;
   product_name: string;
-  unit_of_measure: string;
+  modifier: string;
   unit_price: number;
   quantity: number;
 };
@@ -150,7 +150,7 @@ export function NewOrderCart({ categories, products, storeId }: NewOrderCartProp
       payload: {
         product_id: product.id,
         product_name: product.name,
-        unit_of_measure: product.unit_of_measure,
+        modifier: product.modifier,
         unit_price: product.price,
         quantity: 1,
       },
@@ -210,7 +210,7 @@ export function NewOrderCart({ categories, products, storeId }: NewOrderCartProp
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{item.product_name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {formatPrice(item.unit_price)} &middot; {item.unit_of_measure}
+                      {formatPrice(item.unit_price)} &middot; {item.modifier}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -367,7 +367,7 @@ export function NewOrderCart({ categories, products, storeId }: NewOrderCartProp
                         <span className="text-sm font-medium">{product.name}</span>
                         <p className="text-xs text-muted-foreground">
                           {formatPrice(product.price)} &middot;{" "}
-                          {product.unit_of_measure}
+                          {product.modifier}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">

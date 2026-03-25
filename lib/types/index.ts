@@ -9,7 +9,7 @@ export type UserRow = {
   id: string;
   email: string;
   name: string;
-  role: "admin" | "factory" | "store";
+  role: "admin" | "commissary" | "store";
   store_id: string | null;
   store_name: string | null;
   is_active: boolean;
@@ -18,6 +18,11 @@ export type UserRow = {
 export type StoreRow = {
   id: string;
   name: string;
+  business_name?: string;
+  address?: string;
+  postal_code?: string;
+  phone?: string;
+  email?: string;
 };
 
 export type CategoryRow = {
@@ -30,13 +35,13 @@ export type ProductRow = {
   id: string;
   name: string;
   price: number;
-  unit_of_measure: string;
+  modifier: string;
   category_id: string;
   category_name?: string;
   image_url?: string | null;
 };
 
-export type OrderStatus = "submitted" | "under_review" | "approved" | "declined" | "fulfilled";
+export type OrderStatus = "submitted" | "approved" | "declined" | "fulfilled";
 
 export type OrderRow = {
   id: string;
@@ -57,7 +62,7 @@ export type OrderItemRow = {
   order_id: string;
   product_id: string;
   product_name: string;
-  unit_of_measure: string;
+  modifier: string;
   unit_price: number;
   quantity: number;
 };
@@ -74,6 +79,7 @@ export type InvoiceRow = {
   subtotal: number;
   tax_rate: number;
   tax_amount: number;
+  ad_royalties_fee: number;
   grand_total: number;
   created_at: string;
 };
@@ -82,7 +88,7 @@ export type InvoiceItemRow = {
   id: string;
   invoice_id: string;
   product_name: string;
-  unit_of_measure: string;
+  modifier: string;
   unit_price: number;
   quantity: number;
   line_total: number;
@@ -98,15 +104,23 @@ export type AuditTemplateRow = {
   updated_at: string;
 };
 
-export type AuditTemplateItemRow = {
+export type AuditTemplateCategoryRow = {
   id: string;
   template_id: string;
-  label: string;
+  name: string;
   sort_order: number;
   created_at: string;
 };
 
-export type AuditStatus = "draft" | "completed";
+export type AuditTemplateItemRow = {
+  id: string;
+  template_id: string;
+  category_id: string;
+  label: string;
+  description: string | null;
+  sort_order: number;
+  created_at: string;
+};
 
 export type AuditRow = {
   id: string;
@@ -116,7 +130,6 @@ export type AuditRow = {
   template_name?: string;
   conducted_by: string;
   conducted_by_name?: string;
-  status: AuditStatus;
   score: number | null;
   notes: string | null;
   conducted_at: string | null;
@@ -124,11 +137,13 @@ export type AuditRow = {
   updated_at: string;
 };
 
+export type AuditRating = "poor" | "satisfactory" | "good";
+
 export type AuditResponseRow = {
   id: string;
   audit_id: string;
   template_item_id: string;
-  passed: boolean;
+  rating: AuditRating;
   notes: string | null;
 };
 

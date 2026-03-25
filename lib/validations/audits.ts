@@ -10,7 +10,9 @@ export type CreateAuditValues = z.infer<typeof createAuditSchema>;
 export const saveResponseSchema = z.object({
   audit_id: z.string().uuid("Invalid audit ID."),
   template_item_id: z.string().uuid("Invalid template item ID."),
-  passed: z.boolean(),
+  rating: z.enum(["poor", "satisfactory", "good"], {
+    message: "Rating must be poor, satisfactory, or good.",
+  }),
   notes: z.string().trim().max(1000).optional(),
 });
 

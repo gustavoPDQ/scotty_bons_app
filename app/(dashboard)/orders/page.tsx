@@ -4,16 +4,13 @@ import { Package, Plus, Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { formatPrice } from "@/lib/utils";
-import { STATUS_COLORS, STATUS_LABELS } from "@/lib/constants/order-status";
 import type { OrderStatus } from "@/lib/types";
 import { RealtimeOrderList } from "@/components/orders/realtime-order-list";
 import { OrderFilters } from "@/components/orders/order-filters";
+import { OrderListWithSelection } from "@/components/orders/order-list-with-selection";
 
 const VALID_STATUSES: OrderStatus[] = [
   "submitted",
-  "under_review",
   "approved",
   "declined",
   "fulfilled",
@@ -121,7 +118,7 @@ export default async function OrdersPage({
     }
   }
 
-  // For admin/factory roles, fetch store names to display on each order
+  // For admin/commissary roles, fetch store names to display on each order
   const storeNames: Record<string, string> = {};
   if (!isStore && orders.length > 0) {
     const storeIds = [...new Set(orders.map((o) => o.store_id))];
@@ -147,7 +144,7 @@ export default async function OrdersPage({
     );
   }
 
-  // Fetch all stores for the filter dropdown (admin/factory only)
+  // Fetch all stores for the filter dropdown (admin/commissary only)
   let allStores: { id: string; name: string }[] = [];
   if (!isStore) {
     const { data: storesData } = await supabase
@@ -156,6 +153,17 @@ export default async function OrdersPage({
       .order("name");
     allStores = storesData ?? [];
   }
+
+  // Prepare serializable order data for client component
+  const orderData = orders.map((order) => ({
+    id: order.id,
+    store_id: order.store_id,
+    status: order.status as OrderStatus,
+    created_at: order.created_at,
+    item_count: itemSummaries[order.id]?.count ?? 0,
+    total: itemSummaries[order.id]?.total ?? 0,
+    store_name: storeNames[order.store_id] ?? undefined,
+  }));
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -172,7 +180,7 @@ export default async function OrdersPage({
       </div>
 
       <OrderFilters
-        role={role as "admin" | "factory" | "store"}
+        role={role as "admin" | "commissary" | "store"}
         stores={allStores}
       />
 
@@ -210,53 +218,14 @@ export default async function OrdersPage({
         </Card>
       ) : (
         (() => {
-          const orderListContent = (
-            <div className="rounded-md border divide-y">
-              {orders.map((order) => {
-                const status = order.status as OrderStatus;
-                const summary = itemSummaries[order.id];
-                const storeName = storeNames[order.store_id];
-                return (
-                  <Link
-                    key={order.id}
-                    href={`/orders/${order.id}`}
-                    className="flex items-center justify-between gap-4 px-4 py-3 border-l-4 border-primary hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">
-                        Order {order.id.slice(0, 8)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Intl.DateTimeFormat("en-CA", {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        }).format(new Date(order.created_at))}
-                        {summary
-                          ? ` · ${summary.count} ${summary.count === 1 ? "item" : "items"}`
-                          : ""}
-                        {storeName ? ` · ${storeName}` : ""}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      {summary && (
-                        <span className="text-sm font-medium">
-                          {formatPrice(summary.total)}
-                        </span>
-                      )}
-                      <Badge className={STATUS_COLORS[status]}>
-                        {STATUS_LABELS[status]}
-                      </Badge>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
+          const content = (
+            <OrderListWithSelection orders={orderData} />
           );
 
-          return role === "admin" || role === "factory" ? (
-            <RealtimeOrderList>{orderListContent}</RealtimeOrderList>
+          return role === "admin" || role === "commissary" ? (
+            <RealtimeOrderList>{content}</RealtimeOrderList>
           ) : (
-            orderListContent
+            content
           );
         })()
       )}

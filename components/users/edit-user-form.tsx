@@ -114,7 +114,7 @@ export function EditUserForm({ user, stores, currentUserId, onSuccess }: EditUse
                 </FormControl>
                 <SelectContent>
                   <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="factory">Factory User</SelectItem>
+                  <SelectItem value="commissary">Commissary User</SelectItem>
                   <SelectItem value="store">Store User</SelectItem>
                 </SelectContent>
               </Select>

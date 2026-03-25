@@ -5,10 +5,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import {
-  financialSettingsSchema,
-  type FinancialSettingsValues,
+  generalSettingsSchema,
+  type GeneralSettingsValues,
 } from "@/lib/validations/settings";
-import { saveFinancialSettings } from "@/app/(dashboard)/settings/actions";
+import { saveGeneralSettings } from "@/app/(dashboard)/settings/actions";
 import {
   Form,
   FormControl,
@@ -36,45 +36,46 @@ export function FinancialSettingsForm({
 }: FinancialSettingsFormProps) {
   const [isPending, startTransition] = useTransition();
 
-  const form = useForm<FinancialSettingsValues>({
-    resolver: zodResolver(financialSettingsSchema),
+  const form = useForm<GeneralSettingsValues>({
+    resolver: zodResolver(generalSettingsSchema),
     defaultValues: {
-      tax_rate: initialValues.tax_rate ? Number(initialValues.tax_rate) : 0,
-      currency: initialValues.currency || "CAD",
-      payment_terms: initialValues.payment_terms || "",
-      company_name: initialValues.company_name || "",
-      company_address: initialValues.company_address || "",
-      company_phone: initialValues.company_phone || "",
-      company_email: initialValues.company_email || "",
+      hst_rate: initialValues.hst_rate ? Number(initialValues.hst_rate) : 0,
+      ad_royalties_fee: initialValues.ad_royalties_fee
+        ? Number(initialValues.ad_royalties_fee)
+        : 0,
+      commissary_name: initialValues.commissary_name || "",
+      commissary_address: initialValues.commissary_address || "",
+      commissary_postal_code: initialValues.commissary_postal_code || "",
+      commissary_phone: initialValues.commissary_phone || "",
     },
   });
 
-  const onSubmit = (values: FinancialSettingsValues) => {
+  const onSubmit = (values: GeneralSettingsValues) => {
     startTransition(async () => {
-      const result = await saveFinancialSettings(values);
+      const result = await saveGeneralSettings(values);
       if (result.error) {
         toast.error(result.error);
         return;
       }
-      toast.success("Financial settings saved.");
+      toast.success("Settings saved.");
     });
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Financial Configuration</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Tax & Fees</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField
                 control={form.control}
-                name="tax_rate"
+                name="hst_rate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Tax Rate (%)</FormLabel>
+                    <FormLabel>HST Rate (%)</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
@@ -97,31 +98,46 @@ export function FinancialSettingsForm({
               />
               <FormField
                 control={form.control}
-                name="currency"
+                name="ad_royalties_fee"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Currency</FormLabel>
+                    <FormLabel>Ad & Royalties Fee ($)</FormLabel>
                     <FormControl>
-                      <Input placeholder="CAD" {...field} />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        {...field}
+                        onChange={(e) =>
+                          field.onChange(
+                            e.target.value === ""
+                              ? ""
+                              : Number(e.target.value),
+                          )
+                        }
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
+          </CardContent>
+        </Card>
 
+        <Card>
+          <CardHeader>
+            <CardTitle>Commissary Billing Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <FormField
               control={form.control}
-              name="payment_terms"
+              name="commissary_name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Payment Terms</FormLabel>
+                  <FormLabel>Business Name</FormLabel>
                   <FormControl>
-                    <Textarea
-                      placeholder="e.g., Net 30 days"
-                      rows={2}
-                      {...field}
-                    />
+                    <Input placeholder="Commissary" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -130,27 +146,13 @@ export function FinancialSettingsForm({
 
             <FormField
               control={form.control}
-              name="company_name"
+              name="commissary_address"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Company Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Scotty Supply Co." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="company_address"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Company Address</FormLabel>
+                  <FormLabel>Address</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="123 Main St, Toronto, ON"
+                      placeholder="501 Rogers rd Toronto, Ontario"
                       rows={2}
                       {...field}
                     />
@@ -163,12 +165,12 @@ export function FinancialSettingsForm({
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField
                 control={form.control}
-                name="company_phone"
+                name="commissary_postal_code"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Company Phone</FormLabel>
+                    <FormLabel>Postal Code</FormLabel>
                     <FormControl>
-                      <Input placeholder="+1 416-555-0100" {...field} />
+                      <Input placeholder="M6M1B4" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -176,29 +178,25 @@ export function FinancialSettingsForm({
               />
               <FormField
                 control={form.control}
-                name="company_email"
+                name="commissary_phone"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Company Email</FormLabel>
+                    <FormLabel>Phone</FormLabel>
                     <FormControl>
-                      <Input
-                        type="email"
-                        placeholder="billing@scotty.com"
-                        {...field}
-                      />
+                      <Input placeholder="416-657-8977" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
+          </CardContent>
+        </Card>
 
-            <Button type="submit" disabled={isPending}>
-              {isPending ? "Saving..." : "Save"}
-            </Button>
-          </form>
-        </Form>
-      </CardContent>
-    </Card>
+        <Button type="submit" disabled={isPending}>
+          {isPending ? "Saving..." : "Save Settings"}
+        </Button>
+      </form>
+    </Form>
   );
 }

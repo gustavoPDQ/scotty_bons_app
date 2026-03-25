@@ -14,7 +14,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { deleteOrder } from "@/app/(dashboard)/orders/[order-id]/actions";
-import { TERMINAL_STATUSES } from "@/lib/constants/order-status";
 import type { OrderStatus } from "@/lib/types";
 
 interface DeleteOrderButtonProps {
@@ -32,7 +31,13 @@ export function DeleteOrderButton({
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  if (role !== "admin" || TERMINAL_STATUSES.includes(currentStatus)) {
+  // Admin/commissary: can delete if not fulfilled
+  // Store: can delete own submitted orders
+  const canDelete =
+    (["admin", "commissary"].includes(role) && currentStatus !== "fulfilled") ||
+    (role === "store" && currentStatus === "submitted");
+
+  if (!canDelete) {
     return null;
   }
 

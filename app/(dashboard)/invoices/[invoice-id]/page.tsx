@@ -23,7 +23,7 @@ export default async function InvoiceDetailPage({
   const { data: invoice } = await supabase
     .from("invoices")
     .select(
-      "id, order_id, invoice_number, store_name, company_name, company_address, company_tax_id, subtotal, tax_rate, tax_amount, grand_total, created_at",
+      "id, order_id, invoice_number, store_name, store_business_name, store_address, store_postal_code, store_phone, store_email, company_name, company_address, company_tax_id, subtotal, tax_rate, tax_amount, ad_royalties_fee, grand_total, created_at",
     )
     .eq("id", invoiceId)
     .single();
@@ -34,7 +34,7 @@ export default async function InvoiceDetailPage({
   const { data: items } = await supabase
     .from("invoice_items")
     .select(
-      "id, product_name, unit_of_measure, unit_price, quantity, line_total",
+      "id, product_name, modifier, unit_price, quantity, line_total",
     )
     .eq("invoice_id", invoiceId);
 
@@ -43,6 +43,7 @@ export default async function InvoiceDetailPage({
   const dateFmt = new Intl.DateTimeFormat("en-CA", { dateStyle: "medium" });
 
   const taxRatePercent = Number(invoice.tax_rate) * 100;
+  const adFee = Number(invoice.ad_royalties_fee ?? 0);
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -68,7 +69,12 @@ export default async function InvoiceDetailPage({
           <div className="flex justify-between items-start">
             <div>
               {invoice.company_name && (
-                <h1 className="text-xl font-bold">{invoice.company_name}</h1>
+                <>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                    From
+                  </p>
+                  <h1 className="text-xl font-bold">{invoice.company_name}</h1>
+                </>
               )}
               {invoice.company_address && (
                 <p className="text-sm text-muted-foreground whitespace-pre-line">
@@ -77,7 +83,7 @@ export default async function InvoiceDetailPage({
               )}
               {invoice.company_tax_id && (
                 <p className="text-sm text-muted-foreground">
-                  {invoice.company_tax_id}
+                  Ph# {invoice.company_tax_id}
                 </p>
               )}
             </div>
@@ -89,12 +95,36 @@ export default async function InvoiceDetailPage({
             </div>
           </div>
 
-          {/* Bill To */}
+          {/* Ship To */}
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
-              Bill To
+              Ship to
             </p>
-            <p className="font-medium">{invoice.store_name}</p>
+            {invoice.store_business_name ? (
+              <p className="font-medium">{invoice.store_business_name}</p>
+            ) : (
+              <p className="font-medium">{invoice.store_name}</p>
+            )}
+            {invoice.store_address && (
+              <p className="text-sm text-muted-foreground whitespace-pre-line">
+                {invoice.store_address}
+              </p>
+            )}
+            {invoice.store_postal_code && (
+              <p className="text-sm text-muted-foreground">
+                {invoice.store_postal_code}
+              </p>
+            )}
+            {invoice.store_phone && (
+              <p className="text-sm text-muted-foreground">
+                Ph# {invoice.store_phone}
+              </p>
+            )}
+            {invoice.store_email && (
+              <p className="text-sm text-muted-foreground">
+                {invoice.store_email}
+              </p>
+            )}
           </div>
 
           {/* Items Table */}
@@ -103,7 +133,7 @@ export default async function InvoiceDetailPage({
               <thead>
                 <tr className="border-b text-left">
                   <th className="pb-2 font-medium">Product</th>
-                  <th className="pb-2 font-medium">Unit</th>
+                  <th className="pb-2 font-medium">Modifier</th>
                   <th className="pb-2 font-medium text-right">Unit Price</th>
                   <th className="pb-2 font-medium text-right">Qty</th>
                   <th className="pb-2 font-medium text-right">Line Total</th>
@@ -114,7 +144,7 @@ export default async function InvoiceDetailPage({
                   <tr key={item.id}>
                     <td className="py-2">{item.product_name}</td>
                     <td className="py-2 text-muted-foreground">
-                      {item.unit_of_measure}
+                      {item.modifier}
                     </td>
                     <td className="py-2 text-right">
                       {formatPrice(Number(item.unit_price))}
@@ -135,9 +165,17 @@ export default async function InvoiceDetailPage({
               <span className="text-muted-foreground">Subtotal</span>
               <span>{formatPrice(Number(invoice.subtotal))}</span>
             </div>
+            {adFee > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">
+                  Ad & Royalties Fee
+                </span>
+                <span>{formatPrice(adFee)}</span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-muted-foreground">
-                Tax ({taxRatePercent.toFixed(2)}%)
+                HST ({taxRatePercent.toFixed(2)}%)
               </span>
               <span>{formatPrice(Number(invoice.tax_amount))}</span>
             </div>

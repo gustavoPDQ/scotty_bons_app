@@ -6,6 +6,18 @@ const templateItemSchema = z.object({
     .trim()
     .min(1, "Item label is required.")
     .max(500, "Item label must be 500 characters or less."),
+  description: z.string().trim().max(1000).optional(),
+});
+
+const templateCategorySchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Category name is required.")
+    .max(100, "Category name must be 100 characters or less."),
+  items: z
+    .array(templateItemSchema)
+    .min(1, "Each category must have at least one item."),
 });
 
 export const createTemplateSchema = z.object({
@@ -15,9 +27,9 @@ export const createTemplateSchema = z.object({
     .min(1, "Template name is required.")
     .max(100, "Template name must be 100 characters or less."),
   description: z.string().trim().max(500).optional(),
-  items: z
-    .array(templateItemSchema)
-    .min(1, "A template must have at least one checklist item."),
+  categories: z
+    .array(templateCategorySchema)
+    .min(1, "A template must have at least one category."),
 });
 
 export type CreateTemplateValues = z.infer<typeof createTemplateSchema>;

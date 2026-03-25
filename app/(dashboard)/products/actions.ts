@@ -147,10 +147,10 @@ export async function createProduct(
     .insert({
       name: parsed.data.name,
       price: parsed.data.price,
-      unit_of_measure: parsed.data.unit_of_measure,
+      modifier: parsed.data.modifier,
       category_id: parsed.data.category_id,
     })
-    .select("id, name, price, unit_of_measure, category_id, image_url")
+    .select("id, name, price, modifier, category_id, image_url")
     .single();
 
   if (error) {
@@ -186,7 +186,7 @@ export async function updateProduct(
     .update({
       name: parsed.data.name,
       price: parsed.data.price,
-      unit_of_measure: parsed.data.unit_of_measure,
+      modifier: parsed.data.modifier,
       category_id: parsed.data.category_id,
     })
     .eq("id", productId)

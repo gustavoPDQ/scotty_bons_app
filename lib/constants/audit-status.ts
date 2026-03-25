@@ -1,14 +1,5 @@
-import type { AuditStatus } from "@/lib/types";
-
-export const AUDIT_STATUS_LABELS: Record<AuditStatus, string> = {
-  draft: "Draft",
-  completed: "Completed",
-};
-
-export const AUDIT_STATUS_COLORS: Record<AuditStatus, string> = {
-  draft: "bg-gray-500 text-white",
-  completed: "bg-green-600 text-white",
-};
+import type React from "react";
+import type { AuditRating } from "@/lib/types";
 
 export function getScoreColor(score: number): string {
   if (score >= 80) return "text-green-600 bg-green-50 border-green-200";
@@ -21,3 +12,15 @@ export function getScoreLabel(score: number): string {
   if (score >= 60) return "Needs Improvement";
   return "Critical";
 }
+
+export const AUDIT_RATING_LABELS: Record<AuditRating, string> = {
+  poor: "Poor",
+  satisfactory: "Satisfactory",
+  good: "Good",
+};
+
+export const AUDIT_RATING_STYLES: Record<AuditRating, React.CSSProperties> = {
+  poor: { backgroundColor: "#fecaca", color: "#991b1b", borderColor: "transparent" },
+  satisfactory: { backgroundColor: "#fef08a", color: "#854d0e", borderColor: "transparent" },
+  good: { backgroundColor: "#bbf7d0", color: "#166534", borderColor: "transparent" },
+};

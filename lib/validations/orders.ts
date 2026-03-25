@@ -7,7 +7,7 @@ export const createOrderSchema = z.object({
       z.object({
         product_id: z.string().uuid("Invalid product."),
         product_name: z.string().min(1, "Product name is required."),
-        unit_of_measure: z.string().min(1, "Unit of measure is required."),
+        modifier: z.string().min(1, "Modifier is required."),
         unit_price: z.number().positive("Price must be greater than zero."),
         quantity: z.number().int().positive("Quantity must be at least 1."),
       })

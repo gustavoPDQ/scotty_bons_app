@@ -24,7 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import type { AuditTemplateRow, AuditTemplateItemRow } from "@/lib/types";
+import type { AuditTemplateRow, AuditTemplateCategoryRow, AuditTemplateItemRow } from "@/lib/types";
 import { TemplateForm } from "@/components/audits/template-form";
 import {
   createTemplate,
@@ -36,10 +36,11 @@ import type { CreateTemplateValues } from "@/lib/validations/audit-templates";
 
 interface TemplatesClientProps {
   templates: AuditTemplateRow[];
+  allCategories: AuditTemplateCategoryRow[];
   allItems: AuditTemplateItemRow[];
 }
 
-export function TemplatesClient({ templates, allItems }: TemplatesClientProps) {
+export function TemplatesClient({ templates, allCategories, allItems }: TemplatesClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -47,10 +48,18 @@ export function TemplatesClient({ templates, allItems }: TemplatesClientProps) {
   const [editingTemplate, setEditingTemplate] = useState<AuditTemplateRow | null>(null);
   const [deletingTemplate, setDeletingTemplate] = useState<AuditTemplateRow | null>(null);
 
-  function getItemsForTemplate(templateId: string): AuditTemplateItemRow[] {
-    return allItems
-      .filter((i) => i.template_id === templateId)
+  function getCategoriesForTemplate(templateId: string) {
+    const cats = allCategories
+      .filter((c) => c.template_id === templateId)
       .sort((a, b) => a.sort_order - b.sort_order);
+
+    return cats.map((cat) => ({
+      name: cat.name,
+      items: allItems
+        .filter((i) => i.category_id === cat.id)
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((i) => ({ label: i.label, description: i.description ?? undefined })),
+    }));
   }
 
   function handleCreate() {
@@ -201,9 +210,7 @@ export function TemplatesClient({ templates, allItems }: TemplatesClientProps) {
                 ? {
                     name: editingTemplate.name,
                     description: editingTemplate.description ?? undefined,
-                    items: getItemsForTemplate(editingTemplate.id).map((i) => ({
-                      label: i.label,
-                    })),
+                    categories: getCategoriesForTemplate(editingTemplate.id),
                   }
                 : undefined
             }

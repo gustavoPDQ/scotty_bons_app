@@ -4,7 +4,7 @@ export const createUserSchema = z
   .object({
     name: z.string().min(2, "Name must be at least 2 characters."),
     email: z.string().email("Please enter a valid email address."),
-    role: z.enum(["admin", "factory", "store"]),
+    role: z.enum(["admin", "commissary", "store"]),
     store_id: z.string().uuid().optional(),
   })
   .superRefine((data, ctx) => {
@@ -23,7 +23,7 @@ export const updateUserSchema = z
   .object({
     name: z.string().min(2, "Name must be at least 2 characters."),
     email: z.string().email("Please enter a valid email address."),
-    role: z.enum(["admin", "factory", "store"]),
+    role: z.enum(["admin", "commissary", "store"]),
     store_id: z.string().uuid().optional(),
   })
   .superRefine((data, ctx) => {
@@ -40,12 +40,34 @@ export type UpdateUserValues = z.infer<typeof updateUserSchema>;
 
 export const createStoreSchema = z.object({
   name: z.string().min(2, "Store name must be at least 2 characters."),
+  business_name: z.string().max(200, "Business name is too long."),
+  address: z.string().max(500, "Address is too long."),
+  postal_code: z.string().max(20, "Postal code is too long."),
+  phone: z.string().max(50, "Phone number is too long."),
+  email: z
+    .string()
+    .max(200, "Email is too long.")
+    .refine(
+      (val) => val === "" || z.string().email().safeParse(val).success,
+      "Please enter a valid email address.",
+    ),
 });
 
 export type CreateStoreValues = z.infer<typeof createStoreSchema>;
 
 export const updateStoreSchema = z.object({
   name: z.string().min(2, "Store name must be at least 2 characters."),
+  business_name: z.string().max(200, "Business name is too long."),
+  address: z.string().max(500, "Address is too long."),
+  postal_code: z.string().max(20, "Postal code is too long."),
+  phone: z.string().max(50, "Phone number is too long."),
+  email: z
+    .string()
+    .max(200, "Email is too long.")
+    .refine(
+      (val) => val === "" || z.string().email().safeParse(val).success,
+      "Please enter a valid email address.",
+    ),
 });
 
 export type UpdateStoreValues = z.infer<typeof updateStoreSchema>;

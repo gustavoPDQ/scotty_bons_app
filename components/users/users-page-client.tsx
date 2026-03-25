@@ -125,7 +125,12 @@ export function UsersPageClient({
                   key={store.id}
                   className="flex items-center justify-between px-4 py-3"
                 >
-                  <span className="text-sm font-medium">{store.name}</span>
+                  <div className="min-w-0">
+                    <span className="text-sm font-medium">{store.name}</span>
+                    {store.business_name && (
+                      <p className="text-xs text-muted-foreground">{store.business_name}</p>
+                    )}
+                  </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="size-8">

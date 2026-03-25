@@ -5,8 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { AUDIT_STATUS_COLORS, AUDIT_STATUS_LABELS, getScoreColor, getScoreLabel } from "@/lib/constants/audit-status";
-import type { AuditStatus, AuditRow } from "@/lib/types";
+import { getScoreColor, getScoreLabel } from "@/lib/constants/audit-status";
+import type { AuditRow } from "@/lib/types";
 import { AuditFilters } from "@/components/audits/audit-filters";
 import { NewAuditDialog } from "@/components/audits/new-audit-dialog";
 
@@ -37,14 +37,15 @@ export default async function AuditsPage({
 
   if (!profile) redirect("/login");
 
-  const role = profile.role as "admin" | "factory" | "store";
+  const role = profile.role as "admin" | "commissary" | "store";
   const isAdmin = role === "admin";
+  const canConduct = role === "admin" || role === "commissary";
 
   // Validate search params
-  const statusFilter = (["draft", "completed"] as AuditStatus[]).includes(
-    params.status as AuditStatus
+  const statusFilter = (["in_progress", "completed"] as const).includes(
+    params.status as "in_progress" | "completed"
   )
-    ? params.status
+    ? (params.status as "in_progress" | "completed")
     : undefined;
   const storeFilter =
     role !== "store" && params.store_id && isValidUUID(params.store_id)
@@ -54,11 +55,13 @@ export default async function AuditsPage({
   // Build query
   let query = supabase
     .from("audits")
-    .select("id, template_id, store_id, conducted_by, status, score, notes, conducted_at, created_at, updated_at")
+    .select("id, template_id, store_id, conducted_by, score, notes, conducted_at, created_at, updated_at")
     .order("created_at", { ascending: false });
 
-  if (statusFilter) {
-    query = query.eq("status", statusFilter);
+  if (statusFilter === "completed") {
+    query = query.not("conducted_at", "is", null);
+  } else if (statusFilter === "in_progress") {
+    query = query.is("conducted_at", null);
   }
   if (storeFilter) {
     query = query.eq("store_id", storeFilter);
@@ -104,7 +107,6 @@ export default async function AuditsPage({
     for (const a of auditsRaw) {
       audits.push({
         ...(a as Omit<AuditRow, "store_name" | "template_name" | "conducted_by_name">),
-        status: a.status as AuditStatus,
         store_name: storeNames[a.store_id],
         template_name: templateNames[a.template_id],
         conducted_by_name: conductorNames[a.conducted_by],
@@ -122,9 +124,9 @@ export default async function AuditsPage({
     allStores = storesData ?? [];
   }
 
-  // Fetch active templates for new audit dialog (admin only)
+  // Fetch active templates for new audit dialog (admin + commissary)
   let activeTemplates: { id: string; name: string }[] = [];
-  if (isAdmin) {
+  if (canConduct) {
     const { data: templatesData } = await supabase
       .from("audit_templates")
       .select("id, name")
@@ -152,7 +154,7 @@ export default async function AuditsPage({
               </Link>
             </Button>
           )}
-          {isAdmin && activeTemplates.length > 0 && (
+          {canConduct && activeTemplates.length > 0 && (
             <NewAuditDialog stores={allStores} templates={activeTemplates} />
           )}
         </div>
@@ -166,44 +168,54 @@ export default async function AuditsPage({
             <ClipboardCheck className="mx-auto size-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No audits yet</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              {isAdmin
+              {canConduct
                 ? "Create your first audit to get started."
                 : "No audits have been conducted yet."}
             </p>
           </CardContent>
         </Card>
       ) : (
-        <div className="rounded-md border divide-y">
-          {audits.map((audit) => (
-            <Link
-              key={audit.id}
-              href={`/audits/${audit.id}`}
-              className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-muted/50 transition-colors"
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-medium">
-                  {audit.template_name ?? "Audit"} — {audit.store_name ?? "Unknown Store"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {formatDate(audit.created_at)}
-                  {audit.conducted_by_name ? ` · by ${audit.conducted_by_name}` : ""}
-                </p>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                {audit.status === "completed" && audit.score !== null && (
-                  <span
-                    className={`text-sm font-medium px-2 py-0.5 rounded border ${getScoreColor(audit.score)}`}
+        <Card className="divide-y">
+          {audits.map((audit) => {
+            const isCompleted = !!audit.conducted_at;
+            return (
+              <Link
+                key={audit.id}
+                href={`/audits/${audit.id}`}
+                className="flex items-center justify-between gap-4 px-4 py-3 border-l-4 border-green-300 hover:bg-muted/50 transition-colors"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">
+                    {audit.template_name ?? "Audit"} — {audit.store_name ?? "Unknown Store"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDate(audit.created_at)}
+                    {audit.conducted_by_name ? ` · by ${audit.conducted_by_name}` : ""}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  {isCompleted && audit.score !== null && (
+                    <span
+                      className={`text-sm font-medium px-2 py-0.5 rounded border ${getScoreColor(audit.score)}`}
+                    >
+                      {audit.score}% — {getScoreLabel(audit.score)}
+                    </span>
+                  )}
+                  <Badge
+                    variant="status"
+                    style={
+                      isCompleted
+                        ? { backgroundColor: "#15803d", color: "#fff", borderColor: "transparent" }
+                        : { backgroundColor: "#d97706", color: "#fff", borderColor: "transparent" }
+                    }
                   >
-                    {audit.score}% — {getScoreLabel(audit.score)}
-                  </span>
-                )}
-                <Badge className={AUDIT_STATUS_COLORS[audit.status]}>
-                  {AUDIT_STATUS_LABELS[audit.status]}
-                </Badge>
-              </div>
-            </Link>
-          ))}
-        </div>
+                    {isCompleted ? "Completed" : "In Progress"}
+                  </Badge>
+                </div>
+              </Link>
+            );
+          })}
+        </Card>
       )}
     </div>
   );

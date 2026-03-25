@@ -13,6 +13,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { createStore } from "@/app/(dashboard)/users/actions";
 import { createStoreSchema, type CreateStoreValues } from "@/lib/validations/users";
@@ -26,7 +27,14 @@ export function CreateStoreForm({ onSuccess }: CreateStoreFormProps) {
 
   const form = useForm<CreateStoreValues>({
     resolver: zodResolver(createStoreSchema),
-    defaultValues: { name: "" },
+    defaultValues: {
+      name: "",
+      business_name: "",
+      address: "",
+      postal_code: "",
+      phone: "",
+      email: "",
+    },
   });
 
   const onSubmit = (values: CreateStoreValues) => {
@@ -53,6 +61,81 @@ export function CreateStoreForm({ onSuccess }: CreateStoreFormProps) {
               <FormLabel>Store Name</FormLabel>
               <FormControl>
                 <Input placeholder="e.g. Scotty Bons — Downtown" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="business_name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Business Name</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g. 2414352 ONTARIO LTD" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="address"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Address</FormLabel>
+              <FormControl>
+                <Textarea
+                  placeholder="789 Warden Avenue Scarborough, Ontario"
+                  rows={2}
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField
+            control={form.control}
+            name="postal_code"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Postal Code</FormLabel>
+                <FormControl>
+                  <Input placeholder="M1L4C2" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="phone"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Phone</FormLabel>
+                <FormControl>
+                  <Input placeholder="416-752-7222" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Email</FormLabel>
+              <FormControl>
+                <Input type="email" placeholder="store@example.com" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>

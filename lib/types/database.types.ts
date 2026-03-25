@@ -63,7 +63,7 @@ export type Database = {
           order_id: string
           product_id: string
           product_name: string
-          unit_of_measure: string
+          modifier: string
           unit_price: number
           quantity: number
           created_at: string
@@ -73,7 +73,7 @@ export type Database = {
           order_id: string
           product_id: string
           product_name: string
-          unit_of_measure: string
+          modifier: string
           unit_price: number
           quantity: number
           created_at?: string
@@ -83,7 +83,7 @@ export type Database = {
           order_id?: string
           product_id?: string
           product_name?: string
-          unit_of_measure?: string
+          modifier?: string
           unit_price?: number
           quantity?: number
           created_at?: string
@@ -170,7 +170,7 @@ export type Database = {
           id: string
           name: string
           price: number
-          unit_of_measure: string
+          modifier: string
           category_id: string
           image_url: string | null
           created_at: string
@@ -180,7 +180,7 @@ export type Database = {
           id?: string
           name: string
           price: number
-          unit_of_measure: string
+          modifier: string
           category_id: string
           image_url?: string | null
           created_at?: string
@@ -190,7 +190,7 @@ export type Database = {
           id?: string
           name?: string
           price?: number
-          unit_of_measure?: string
+          modifier?: string
           category_id?: string
           image_url?: string | null
           created_at?: string
@@ -293,7 +293,7 @@ export type Database = {
       }
     }
     Enums: {
-      user_role: "admin" | "factory" | "store"
+      user_role: "admin" | "commissary" | "store"
     }
     CompositeTypes: {
       [_ in never]: never

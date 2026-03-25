@@ -23,26 +23,18 @@ export const changeEmailSchema = z.object({
 
 export type ChangeEmailValues = z.infer<typeof changeEmailSchema>;
 
-export const financialSettingsSchema = z.object({
-  tax_rate: z
-    .number({ error: "Tax rate must be a number." })
-    .min(0, "Tax rate cannot be negative.")
-    .max(100, "Tax rate cannot exceed 100%."),
-  currency: z
-    .string()
-    .min(1, "Currency is required.")
-    .max(10, "Currency code is too long."),
-  payment_terms: z.string().max(500, "Payment terms is too long."),
-  company_name: z.string().max(200, "Company name is too long."),
-  company_address: z.string().max(500, "Address is too long."),
-  company_phone: z.string().max(50, "Phone number is too long."),
-  company_email: z
-    .string()
-    .max(200, "Email is too long.")
-    .refine(
-      (val) => val === "" || z.string().email().safeParse(val).success,
-      "Please enter a valid email address.",
-    ),
+export const generalSettingsSchema = z.object({
+  hst_rate: z
+    .number({ error: "HST rate must be a number." })
+    .min(0, "HST rate cannot be negative.")
+    .max(100, "HST rate cannot exceed 100%."),
+  ad_royalties_fee: z
+    .number({ error: "Fee must be a number." })
+    .min(0, "Fee cannot be negative."),
+  commissary_name: z.string().max(200, "Business name is too long."),
+  commissary_address: z.string().max(500, "Address is too long."),
+  commissary_postal_code: z.string().max(20, "Postal code is too long."),
+  commissary_phone: z.string().max(50, "Phone number is too long."),
 });
 
-export type FinancialSettingsValues = z.infer<typeof financialSettingsSchema>;
+export type GeneralSettingsValues = z.infer<typeof generalSettingsSchema>;
