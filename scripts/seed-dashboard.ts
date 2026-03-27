@@ -5,7 +5,9 @@
  * Prerequisites: .env.local must have NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
  */
 
-import "dotenv/config";
+import { config } from "dotenv";
+config({ path: ".env.local" });
+
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -24,12 +26,58 @@ function randInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function monthsAgo(n: number): Date {
+function randomDate(monthsAgo: number): Date {
   const d = new Date();
-  d.setMonth(d.getMonth() - n);
+  d.setMonth(d.getMonth() - monthsAgo);
   d.setDate(randInt(1, 28));
   d.setHours(randInt(8, 18), randInt(0, 59), 0, 0);
   return d;
+}
+
+async function getNextOrderNumber(): Promise<string> {
+  const year = new Date().getFullYear();
+  // Use raw SQL via rpc or direct counter update
+  const { data, error } = await supabase
+    .from("order_number_counters")
+    .upsert({ year, counter: 1 }, { onConflict: "year" })
+    .select("counter")
+    .single();
+
+  if (error) {
+    // If upsert fails, try increment approach
+    const { data: existing } = await supabase
+      .from("order_number_counters")
+      .select("counter")
+      .eq("year", year)
+      .single();
+
+    const nextCounter = (existing?.counter ?? 0) + 1;
+    await supabase
+      .from("order_number_counters")
+      .upsert({ year, counter: nextCounter });
+
+    return `ORD-${year}-${String(nextCounter).padStart(4, "0")}`;
+  }
+
+  return `ORD-${year}-${String(data.counter).padStart(4, "0")}`;
+}
+
+let orderCounter = 0;
+
+async function initOrderCounter() {
+  const year = new Date().getFullYear();
+  const { data } = await supabase
+    .from("order_number_counters")
+    .select("counter")
+    .eq("year", year)
+    .single();
+  orderCounter = data?.counter ?? 0;
+}
+
+function nextOrderNumber(): string {
+  orderCounter++;
+  const year = new Date().getFullYear();
+  return `ORD-${year}-${String(orderCounter).padStart(4, "0")}`;
 }
 
 // ── Main ──
@@ -38,27 +86,22 @@ async function main() {
   console.log("Fetching existing data...");
 
   // Get stores
-  const { data: stores, error: storesErr } = await supabase
-    .from("stores")
-    .select("id, name");
-  if (storesErr) throw storesErr;
+  const { data: stores } = await supabase.from("stores").select("id, name");
   if (!stores?.length) throw new Error("No stores found. Create stores first.");
-  console.log(`  Found ${stores.length} stores`);
+  console.log(`  ${stores.length} stores`);
 
   // Get products
-  const { data: products, error: productsErr } = await supabase
+  const { data: products } = await supabase
     .from("products")
     .select("id, name, price, modifier")
     .eq("active", true);
-  if (productsErr) throw productsErr;
-  if (!products?.length) throw new Error("No products found. Create products first.");
-  console.log(`  Found ${products.length} products`);
+  if (!products?.length) throw new Error("No products found.");
+  console.log(`  ${products.length} products`);
 
-  // Get users with profiles
-  const { data: profiles, error: profilesErr } = await supabase
+  // Get profiles
+  const { data: profiles } = await supabase
     .from("profiles")
     .select("user_id, role, store_id");
-  if (profilesErr) throw profilesErr;
 
   const storeUsers = profiles?.filter((p) => p.role === "store" && p.store_id) ?? [];
   const adminUsers = profiles?.filter((p) => p.role === "admin") ?? [];
@@ -67,14 +110,13 @@ async function main() {
 
   if (!storeUsers.length) throw new Error("No store users found.");
   if (!approvers.length) throw new Error("No admin/commissary users found.");
-  console.log(`  Found ${storeUsers.length} store users, ${approvers.length} approvers`);
+  console.log(`  ${storeUsers.length} store users, ${approvers.length} approvers`);
 
   // Get audit templates with items
-  const { data: templates, error: templatesErr } = await supabase
+  const { data: templates } = await supabase
     .from("audit_templates")
     .select("id, name")
     .eq("is_active", true);
-  if (templatesErr) throw templatesErr;
 
   let templateItems: { id: string; template_id: string }[] = [];
   if (templates?.length) {
@@ -82,83 +124,88 @@ async function main() {
       .from("audit_template_items")
       .select("id, template_id");
     templateItems = items ?? [];
-    console.log(`  Found ${templates.length} audit templates, ${templateItems.length} items`);
+    console.log(`  ${templates.length} templates, ${templateItems.length} template items`);
   }
 
-  // Get financial settings (needed to check if fulfillment will work)
-  const { data: settings } = await supabase
-    .from("financial_settings")
-    .select("key, value");
-  const hasFinancialSettings = settings?.some((s) => s.key === "hst_rate");
-  console.log(`  Financial settings: ${hasFinancialSettings ? "configured" : "missing"}`);
+  // Init order counter
+  await initOrderCounter();
+  console.log(`  Order counter starts at ${orderCounter}`);
 
   // ══════════════════════════════════════════════
-  // CREATE ORDERS — spread over last 12 months
+  // CREATE ORDERS — ~60-80 orders over 12 months
   // ══════════════════════════════════════════════
   console.log("\nCreating orders...");
 
-  const ORDER_STATUSES = ["submitted", "approved", "declined", "fulfilled"] as const;
-  const createdOrders: {
+  interface CreatedOrder {
     id: string;
     store_id: string;
     status: string;
-    created_at: string;
     submitted_by: string;
-  }[] = [];
+  }
+  const createdOrders: CreatedOrder[] = [];
 
-  // Generate ~60 orders spread across months
   for (let monthOffset = 11; monthOffset >= 0; monthOffset--) {
     // More orders in recent months
-    const orderCount = monthOffset < 3 ? randInt(6, 10) : randInt(3, 6);
+    const count = monthOffset < 3 ? randInt(7, 12) : randInt(3, 7);
 
-    for (let i = 0; i < orderCount; i++) {
+    for (let i = 0; i < count; i++) {
+      // Pick a store user (determines the store)
       const storeUser = pick(storeUsers);
       const storeId = storeUser.store_id!;
       const submittedBy = storeUser.user_id;
-      const createdAt = monthsAgo(monthOffset);
+      const createdAt = randomDate(monthOffset);
+      const orderNumber = nextOrderNumber();
 
-      // Pick 2-8 random products
-      const itemCount = randInt(2, 8);
-      const selectedProducts = new Set<string>();
-      while (selectedProducts.size < Math.min(itemCount, products.length)) {
-        selectedProducts.add(pick(products).id);
+      // Insert order
+      const { data: order, error: orderErr } = await supabase
+        .from("orders")
+        .insert({
+          store_id: storeId,
+          submitted_by: submittedBy,
+          status: "submitted",
+          order_number: orderNumber,
+          created_at: createdAt.toISOString(),
+        })
+        .select("id")
+        .single();
+
+      if (orderErr) {
+        console.warn(`  Order insert failed: ${orderErr.message}`);
+        continue;
       }
 
-      const items = Array.from(selectedProducts).map((pid) => ({
-        product_id: pid,
+      // Insert initial status history
+      await supabase.from("order_status_history").insert({
+        order_id: order.id,
+        status: "submitted",
+        changed_by: submittedBy,
+        changed_at: createdAt.toISOString(),
+      });
+
+      // Pick 2-8 random products for order items
+      const itemCount = randInt(2, Math.min(8, products.length));
+      const shuffled = [...products].sort(() => Math.random() - 0.5);
+      const selectedProducts = shuffled.slice(0, itemCount);
+
+      const orderItems = selectedProducts.map((p) => ({
+        order_id: order.id,
+        product_id: p.id,
+        product_name: p.name,
+        modifier: p.modifier,
+        unit_price: p.price,
         quantity: randInt(1, 10),
       }));
 
-      // Use RPC to create order (handles order_number generation)
-      const { data: orderId, error: orderErr } = await supabase.rpc(
-        "create_order_with_items",
-        {
-          p_store_id: storeId,
-          p_submitted_by: submittedBy,
-          p_items: items,
-        },
-      );
+      await supabase.from("order_items").insert(orderItems);
 
-      if (orderErr) {
-        // Try direct insert as fallback (RPC may require auth context)
-        console.warn(`  RPC failed: ${orderErr.message}, trying direct insert...`);
-        break;
-      }
-
-      // Update created_at to backdate the order
-      await supabase
-        .from("orders")
-        .update({ created_at: createdAt.toISOString() })
-        .eq("id", orderId);
-
-      // Determine status — weighted distribution
+      // Determine target status
       const roll = Math.random();
       let targetStatus: string;
       if (monthOffset === 0 && roll < 0.4) {
-        targetStatus = "submitted"; // recent orders more likely pending
-      } else if (roll < 0.15) {
+        targetStatus = "submitted";
+      } else if (roll < 0.12) {
         targetStatus = "declined";
-      } else if (roll < 0.5) {
+      } else if (roll < 0.35) {
         targetStatus = "approved";
       } else {
         targetStatus = "fulfilled";
@@ -167,73 +214,134 @@ async function main() {
       const approver = pick(approvers);
 
       if (targetStatus !== "submitted") {
-        // Approve or decline
-        const newStatus = targetStatus === "declined" ? "declined" : "approved";
-        const updateData: Record<string, unknown> = { status: newStatus };
-        if (newStatus === "declined") {
+        const intermediateStatus =
+          targetStatus === "declined" ? "declined" : "approved";
+        const updateData: Record<string, unknown> = {
+          status: intermediateStatus,
+        };
+        if (intermediateStatus === "declined") {
           updateData.decline_reason = pick([
             "Duplicate order",
             "Budget exceeded for this month",
-            "Products not available",
-            "Incorrect quantities",
+            "Products temporarily unavailable",
+            "Incorrect quantities — please resubmit",
+            "Store is over credit limit",
           ]);
         }
-        await supabase.from("orders").update(updateData).eq("id", orderId);
+        await supabase.from("orders").update(updateData).eq("id", order.id);
 
-        // Add status history
-        const statusChangeDate = new Date(createdAt);
-        statusChangeDate.setHours(statusChangeDate.getHours() + randInt(1, 48));
+        const changeDate = new Date(createdAt);
+        changeDate.setHours(changeDate.getHours() + randInt(2, 48));
         await supabase.from("order_status_history").insert({
-          order_id: orderId,
-          status: newStatus,
+          order_id: order.id,
+          status: intermediateStatus,
           changed_by: approver.user_id,
-          changed_at: statusChangeDate.toISOString(),
+          changed_at: changeDate.toISOString(),
         });
 
-        // Fulfill if target is fulfilled and financial settings exist
-        if (targetStatus === "fulfilled" && hasFinancialSettings) {
-          try {
-            const { error: fulfillErr } = await supabase.rpc(
-              "fulfill_order_with_invoice",
-              { p_order_id: orderId },
-            );
-            if (fulfillErr) {
-              // Just leave as approved if fulfillment fails
-              console.warn(`  Could not fulfill order: ${fulfillErr.message}`);
-            } else {
-              // Backdate the fulfillment
-              const fulfillDate = new Date(statusChangeDate);
-              fulfillDate.setHours(fulfillDate.getHours() + randInt(1, 72));
-              await supabase
-                .from("orders")
-                .update({ fulfilled_at: fulfillDate.toISOString() })
-                .eq("id", orderId);
+        // Fulfill (manual — insert invoice directly)
+        if (targetStatus === "fulfilled") {
+          const fulfillDate = new Date(changeDate);
+          fulfillDate.setHours(fulfillDate.getHours() + randInt(1, 72));
 
-              // Add fulfilled status history
-              await supabase.from("order_status_history").insert({
-                order_id: orderId,
-                status: "fulfilled",
-                changed_by: approver.user_id,
-                changed_at: fulfillDate.toISOString(),
-              });
+          // Calculate totals
+          const subtotal = orderItems.reduce(
+            (sum, item) => sum + Number(item.unit_price) * item.quantity,
+            0,
+          );
+          const taxRate = 0.13;
+          const taxAmount = Math.round(subtotal * taxRate * 100) / 100;
+          const grandTotal = Math.round((subtotal + taxAmount) * 100) / 100;
+
+          const storeName =
+            stores.find((s) => s.id === storeId)?.name ?? "Store";
+
+          // Generate invoice number from order number
+          const invoiceNumber = orderNumber.replace("ORD-", "INV-");
+
+          const { error: invErr } = await supabase.from("invoices").insert({
+            order_id: order.id,
+            invoice_number: invoiceNumber,
+            store_id: storeId,
+            store_name: storeName,
+            company_name: "Scotty Bons Commissary",
+            company_address: "123 Commissary Rd, Toronto ON",
+            company_tax_id: "416-555-0100",
+            subtotal,
+            tax_rate: taxRate,
+            tax_amount: taxAmount,
+            grand_total: grandTotal,
+            created_at: fulfillDate.toISOString(),
+          });
+
+          if (!invErr) {
+            // Insert invoice items
+            const invoiceItemRows = orderItems.map((item) => ({
+              invoice_id: undefined as string | undefined, // we need the invoice id
+              product_name: item.product_name,
+              modifier: item.modifier,
+              unit_price: item.unit_price,
+              quantity: item.quantity,
+              line_total: Number(item.unit_price) * item.quantity,
+            }));
+
+            // Get the invoice id
+            const { data: inv } = await supabase
+              .from("invoices")
+              .select("id")
+              .eq("order_id", order.id)
+              .single();
+
+            if (inv) {
+              await supabase.from("invoice_items").insert(
+                invoiceItemRows.map((r) => ({ ...r, invoice_id: inv.id })),
+              );
             }
-          } catch {
-            // Ignore fulfillment errors
+
+            await supabase
+              .from("orders")
+              .update({
+                status: "fulfilled",
+                fulfilled_at: fulfillDate.toISOString(),
+              })
+              .eq("id", order.id);
+
+            await supabase.from("order_status_history").insert({
+              order_id: order.id,
+              status: "fulfilled",
+              changed_by: approver.user_id,
+              changed_at: fulfillDate.toISOString(),
+            });
+          } else {
+            console.warn(`  Invoice failed: ${invErr.message}`);
           }
         }
       }
 
       createdOrders.push({
-        id: orderId,
+        id: order.id,
         store_id: storeId,
         status: targetStatus,
-        created_at: createdAt.toISOString(),
         submitted_by: submittedBy,
       });
     }
   }
 
+  // Update the order_number_counters to reflect what we used
+  const year = new Date().getFullYear();
+  await supabase
+    .from("order_number_counters")
+    .upsert({ year, counter: orderCounter });
+
   console.log(`  Created ${createdOrders.length} orders`);
+
+  const statusBreakdown = {
+    submitted: createdOrders.filter((o) => o.status === "submitted").length,
+    approved: createdOrders.filter((o) => o.status === "approved").length,
+    declined: createdOrders.filter((o) => o.status === "declined").length,
+    fulfilled: createdOrders.filter((o) => o.status === "fulfilled").length,
+  };
+  console.log("  Breakdown:", statusBreakdown);
 
   // ══════════════════════════════════════════════
   // CREATE AUDITS — spread over last 8 months
@@ -245,39 +353,40 @@ async function main() {
     let auditCount = 0;
 
     for (let monthOffset = 7; monthOffset >= 0; monthOffset--) {
-      // 1-2 audits per store per period
       for (const store of stores) {
-        const auditsThisMonth = randInt(0, 2);
+        // 1-2 audits per store per period (sometimes 0)
+        const auditsThisMonth = monthOffset === 0 ? randInt(0, 1) : randInt(1, 2);
+
         for (let a = 0; a < auditsThisMonth; a++) {
           const template = pick(templates);
           const conductor = pick(approvers);
-          const conductedAt = monthsAgo(monthOffset);
+          const conductedAt = randomDate(monthOffset);
 
           const tplItems = templateItems.filter(
             (ti) => ti.template_id === template.id,
           );
           if (tplItems.length === 0) continue;
 
-          // Create the audit (completed)
-          // Generate responses with a bias toward good scores for most stores,
-          // but one store should have lower scores for variety
+          // Vary scores by store — last store gets lower scores
           const isLowScoreStore = store.id === stores[stores.length - 1]?.id;
+          // Scores should also improve over time for most stores
+          const timeBonus = (7 - monthOffset) * 0.03; // slight improvement over time
 
           const responses = tplItems.map((item) => {
+            const roll = Math.random() + timeBonus;
             let rating: (typeof RATINGS)[number];
-            const roll = Math.random();
             if (isLowScoreStore) {
-              // Lower scores: more poor/satisfactory
-              rating = roll < 0.3 ? "poor" : roll < 0.7 ? "satisfactory" : "good";
+              rating =
+                roll < 0.35 ? "poor" : roll < 0.7 ? "satisfactory" : "good";
             } else {
-              // Higher scores: mostly good
-              rating = roll < 0.05 ? "poor" : roll < 0.25 ? "satisfactory" : "good";
+              rating =
+                roll < 0.08 ? "poor" : roll < 0.3 ? "satisfactory" : "good";
             }
             return { template_item_id: item.id, rating };
           });
 
           // Calculate score
-          const weights = responses.map((r) =>
+          const weights: number[] = responses.map((r) =>
             r.rating === "good" ? 1 : r.rating === "satisfactory" ? 0.5 : 0,
           );
           const score =
@@ -285,7 +394,6 @@ async function main() {
               (weights.reduce((a, b) => a + b, 0) / weights.length) * 10000,
             ) / 100;
 
-          // Insert audit
           const { data: audit, error: auditErr } = await supabase
             .from("audits")
             .insert({
@@ -299,6 +407,7 @@ async function main() {
                 "Great improvement since last audit.",
                 "Follow-up needed on cleanliness items.",
                 "Excellent standards maintained.",
+                "Storage area needs reorganization.",
                 null,
               ]),
               conducted_at: conductedAt.toISOString(),
@@ -312,22 +421,22 @@ async function main() {
             continue;
           }
 
-          // Insert responses
           const responseRows = responses.map((r) => ({
             audit_id: audit.id,
             template_item_id: r.template_item_id,
             rating: r.rating,
-            notes: r.rating === "poor" ? pick(["Needs immediate attention", "Below standard", "Follow-up required"]) : null,
+            notes:
+              r.rating === "poor"
+                ? pick([
+                    "Needs immediate attention",
+                    "Below standard",
+                    "Follow-up required",
+                    "Critical issue identified",
+                  ])
+                : null,
           }));
 
-          const { error: respErr } = await supabase
-            .from("audit_responses")
-            .insert(responseRows);
-
-          if (respErr) {
-            console.warn(`  Audit responses failed: ${respErr.message}`);
-          }
-
+          await supabase.from("audit_responses").insert(responseRows);
           auditCount++;
         }
       }
@@ -338,7 +447,7 @@ async function main() {
     console.log("\nSkipping audits — no templates found.");
   }
 
-  console.log("\nDone! Dashboard should now show rich data.");
+  console.log("\nSeed complete! Refresh the dashboard to see the data.");
 }
 
 main().catch((err) => {
