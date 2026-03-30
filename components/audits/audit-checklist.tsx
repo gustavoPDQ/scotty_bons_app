@@ -184,22 +184,22 @@ export function AuditChecklist({
       {/* Progress */}
       <Card>
         <CardContent className="py-4">
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
             <span>
-              {answeredCount} of {totalItems} items rated
+              {answeredCount} of {totalItems} rated
             </span>
-            <span className="flex items-center gap-3">
+            <span className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm">
               <span className="flex items-center gap-1">
-                <span className="size-2.5 rounded-full bg-green-500" />
-                {ratingCounts.good} good
+                <span className="size-2 sm:size-2.5 rounded-full bg-green-500" />
+                {ratingCounts.good}
               </span>
               <span className="flex items-center gap-1">
-                <span className="size-2.5 rounded-full bg-yellow-500" />
-                {ratingCounts.satisfactory} satisfactory
+                <span className="size-2 sm:size-2.5 rounded-full bg-yellow-500" />
+                {ratingCounts.satisfactory}
               </span>
               <span className="flex items-center gap-1">
-                <span className="size-2.5 rounded-full bg-red-500" />
-                {ratingCounts.poor} poor
+                <span className="size-2 sm:size-2.5 rounded-full bg-red-500" />
+                {ratingCounts.poor}
               </span>
             </span>
           </div>
@@ -248,8 +248,8 @@ export function AuditChecklist({
 
                   return (
                     <div key={item.id} className="border rounded-lg p-3">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
+                        <div className="min-w-0">
                           <p className="text-sm font-medium">{item.label}</p>
                           {item.description && (
                             <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>

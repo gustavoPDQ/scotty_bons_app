@@ -52,7 +52,7 @@ export function AuditFilters({ role, stores }: AuditFiltersProps) {
     <div
       className={`flex flex-wrap items-end gap-3 ${isPending ? "opacity-60" : ""}`}
     >
-      <div className="flex-1 min-w-[140px] max-w-[200px]">
+      <div className="w-[calc(50%-6px)] sm:w-auto sm:min-w-[140px] sm:max-w-[200px]">
         <label className="text-xs font-medium text-muted-foreground mb-1 block">
           Status
         </label>
@@ -72,7 +72,7 @@ export function AuditFilters({ role, stores }: AuditFiltersProps) {
       </div>
 
       {role !== "store" && stores.length > 0 && (
-        <div className="flex-1 min-w-[140px] max-w-[200px]">
+        <div className="w-[calc(50%-6px)] sm:w-auto sm:min-w-[140px] sm:max-w-[200px]">
           <label className="text-xs font-medium text-muted-foreground mb-1 block">
             Store
           </label>

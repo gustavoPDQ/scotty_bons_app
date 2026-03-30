@@ -87,11 +87,11 @@ export function TopProductsSection({
                         <span className="text-sm font-medium truncate mr-2">
                           {cat.name}
                         </span>
-                        <div className="flex items-center gap-3 text-sm shrink-0">
-                          <span className="text-muted-foreground tabular-nums">
+                        <div className="flex items-center gap-2 sm:gap-3 text-sm shrink-0">
+                          <span className="text-muted-foreground tabular-nums hidden sm:inline">
                             {cat.quantity} units
                           </span>
-                          <span className="font-semibold tabular-nums">
+                          <span className="font-semibold tabular-nums text-xs sm:text-sm">
                             {formatPrice(cat.value)}
                           </span>
                         </div>
@@ -142,11 +142,11 @@ export function TopProductsSection({
                             </span>
                           )}
                         </span>
-                        <div className="flex items-center gap-3 text-sm shrink-0">
-                          <span className="text-muted-foreground tabular-nums">
+                        <div className="flex items-center gap-2 sm:gap-3 text-sm shrink-0">
+                          <span className="text-muted-foreground tabular-nums hidden sm:inline">
                             {product.quantity} units
                           </span>
-                          <span className="font-semibold tabular-nums">
+                          <span className="font-semibold tabular-nums text-xs sm:text-sm">
                             {formatPrice(product.value)}
                           </span>
                         </div>

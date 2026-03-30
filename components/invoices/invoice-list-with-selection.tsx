@@ -69,9 +69,6 @@ export function InvoiceListWithSelection({ invoices }: InvoiceListWithSelectionP
                       <p className="text-sm font-semibold">
                         {formatPrice(invoice.grand_total)}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        {dateFmt.format(new Date(invoice.created_at))}
-                      </p>
                     </div>
                     <ChevronRight className="size-4 text-muted-foreground" />
                   </div>

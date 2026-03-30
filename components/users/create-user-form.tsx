@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Eye, EyeOff } from "lucide-react";
 import { createUser } from "@/app/(dashboard)/users/actions";
 import { createUserSchema, type CreateUserValues } from "@/lib/validations/users";
 import type { StoreRow } from "@/lib/types";
@@ -32,10 +33,11 @@ interface CreateUserFormProps {
 
 export function CreateUserForm({ stores, onSuccess }: CreateUserFormProps) {
   const [isPending, startTransition] = useTransition();
+  const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<CreateUserValues>({
     resolver: zodResolver(createUserSchema),
-    defaultValues: { name: "", email: "", role: "store", store_id: undefined },
+    defaultValues: { name: "", email: "", password: "", role: "store", store_id: undefined },
   });
 
   const role = form.watch("role");
@@ -48,7 +50,11 @@ export function CreateUserForm({ stores, onSuccess }: CreateUserFormProps) {
         return;
       }
       form.reset();
-      toast.success(`User "${values.name}" created. They must use Forgot Password to set their password.`);
+      toast.success(
+        values.password
+          ? `User "${values.name}" created with the provided password.`
+          : `User "${values.name}" created. They must use Forgot Password to set their password.`,
+      );
       onSuccess();
     });
   };
@@ -78,6 +84,35 @@ export function CreateUserForm({ stores, onSuccess }: CreateUserFormProps) {
               <FormLabel>Email</FormLabel>
               <FormControl>
                 <Input type="email" placeholder="user@scottybons.com" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="password"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Password <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+              <FormControl>
+                <div className="relative">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Min 6 characters"
+                    className="pr-10"
+                    {...field}
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowPassword(!showPassword)}
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -150,7 +185,7 @@ export function CreateUserForm({ stores, onSuccess }: CreateUserFormProps) {
         )}
 
         <p className="text-xs text-muted-foreground">
-          The user will need to use <strong>Forgot Password</strong> to set their password after account creation.
+          If no password is set, the user will need to use <strong>Forgot Password</strong> to sign in.
         </p>
 
         <div className="flex justify-end gap-2 pt-2">

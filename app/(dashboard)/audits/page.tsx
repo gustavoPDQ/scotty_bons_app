@@ -188,13 +188,13 @@ export default async function AuditsPage({
               <Card key={audit.id} className="hover:shadow-md transition-shadow">
                 <Link
                   href={`/audits/${audit.id}`}
-                  className="flex items-center gap-3 px-4 py-4"
+                  className="flex items-center gap-3 px-4 py-4 min-w-0"
                 >
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-light">
+                  <div className="hidden sm:flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-light">
                     <ClipboardCheck className="size-5 text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                       <p className="text-sm font-semibold">
                         {audit.template_name ?? "Audit"} — {audit.store_name ?? "Unknown Store"}
                       </p>
@@ -209,18 +209,18 @@ export default async function AuditsPage({
                         {isCompleted ? "Completed" : "In Progress"}
                       </Badge>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
                       {formatDate(audit.created_at)}
                       {audit.conducted_by_name ? ` · by ${audit.conducted_by_name}` : ""}
                     </p>
+                    {isCompleted && audit.score !== null && (
+                      <span
+                        className={`inline-block text-xs sm:text-sm font-medium px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border mt-1 ${getScoreColor(audit.score)}`}
+                      >
+                        {audit.score}% — {getScoreLabel(audit.score)}
+                      </span>
+                    )}
                   </div>
-                  {isCompleted && audit.score !== null && (
-                    <span
-                      className={`text-sm font-medium px-2.5 py-1 rounded-full border shrink-0 ${getScoreColor(audit.score)}`}
-                    >
-                      {audit.score}% — {getScoreLabel(audit.score)}
-                    </span>
-                  )}
                 </Link>
               </Card>
             );

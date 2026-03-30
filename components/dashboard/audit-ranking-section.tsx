@@ -78,8 +78,8 @@ export function AuditRankingSection({ rows, dateFmt }: AuditRankingSectionProps)
                 <th className="pb-2 font-medium">Store</th>
                 <th className="pb-2 font-medium text-center">Audits</th>
                 <th className="pb-2 font-medium text-center">Avg Score</th>
-                <th className="pb-2 font-medium text-right">Last Audit</th>
-                <th className="pb-2 font-medium text-right">Days Since</th>
+                <th className="pb-2 font-medium text-right hidden sm:table-cell">Last Audit</th>
+                <th className="pb-2 font-medium text-right hidden sm:table-cell">Days Since</th>
                 <th className="pb-2 font-medium w-10"></th>
               </tr>
             </thead>
@@ -120,10 +120,10 @@ export function AuditRankingSection({ rows, dateFmt }: AuditRankingSectionProps)
                           {row.avgScore.toFixed(1)}%
                         </Badge>
                       </td>
-                      <td className="py-2.5 text-right text-muted-foreground">
+                      <td className="py-2.5 text-right text-muted-foreground hidden sm:table-cell">
                         {row.lastDate ? formatDate(row.lastDate) : "—"}
                       </td>
-                      <td className="py-2.5 text-right">
+                      <td className="py-2.5 text-right hidden sm:table-cell">
                         {row.daysSince !== null ? (
                           <span
                             className={

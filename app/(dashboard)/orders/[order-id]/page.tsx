@@ -289,11 +289,11 @@ export default async function OrderDetailPage({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left">
-                  <th className="pb-2 font-medium">Product Name</th>
+                  <th className="pb-2 font-medium">Product</th>
                   <th className="pb-2 font-medium">Modifier</th>
-                  <th className="pb-2 font-medium text-right">Unit Price</th>
-                  <th className="pb-2 font-medium text-right">Qty</th>
-                  <th className="pb-2 font-medium text-right">Line Total</th>
+                  <th className="pb-2 font-medium text-right hidden sm:table-cell">Unit Price</th>
+                  <th className="pb-2 font-medium text-right pr-4">Qty</th>
+                  <th className="pb-2 font-medium text-right">Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -305,10 +305,10 @@ export default async function OrderDetailPage({
                       <td className="py-2 text-muted-foreground">
                         {item.modifier}
                       </td>
-                      <td className="py-2 text-right">
+                      <td className="py-2 text-right hidden sm:table-cell">
                         {formatPrice(Number(item.unit_price))}
                       </td>
-                      <td className="py-2 text-right">{item.quantity}</td>
+                      <td className="py-2 text-right pr-4">{item.quantity}</td>
                       <td className="py-2 text-right font-medium">
                         {formatPrice(lineTotal)}
                       </td>
@@ -318,7 +318,10 @@ export default async function OrderDetailPage({
               </tbody>
               <tfoot>
                 <tr className="border-t">
-                  <td colSpan={4} className="py-1.5 text-right text-muted-foreground">
+                  <td colSpan={3} className="py-1.5 text-right text-muted-foreground sm:hidden">
+                    Subtotal
+                  </td>
+                  <td colSpan={4} className="py-1.5 text-right text-muted-foreground hidden sm:table-cell">
                     Subtotal
                   </td>
                   <td className="py-1.5 text-right">
@@ -326,7 +329,10 @@ export default async function OrderDetailPage({
                   </td>
                 </tr>
                 <tr>
-                  <td colSpan={4} className="py-1.5 text-right text-muted-foreground">
+                  <td colSpan={3} className="py-1.5 text-right text-muted-foreground sm:hidden">
+                    HST ({(hstRate * 100).toFixed(2)}%)
+                  </td>
+                  <td colSpan={4} className="py-1.5 text-right text-muted-foreground hidden sm:table-cell">
                     HST ({(hstRate * 100).toFixed(2)}%)
                   </td>
                   <td className="py-1.5 text-right">
@@ -335,7 +341,10 @@ export default async function OrderDetailPage({
                 </tr>
                 {adRoyaltiesFee > 0 && (
                   <tr>
-                    <td colSpan={4} className="py-1.5 text-right text-muted-foreground">
+                    <td colSpan={3} className="py-1.5 text-right text-muted-foreground sm:hidden">
+                      Ad & Royalties Fee
+                    </td>
+                    <td colSpan={4} className="py-1.5 text-right text-muted-foreground hidden sm:table-cell">
                       Ad & Royalties Fee
                     </td>
                     <td className="py-1.5 text-right">
@@ -344,7 +353,10 @@ export default async function OrderDetailPage({
                   </tr>
                 )}
                 <tr className="border-t-2">
-                  <td colSpan={4} className="py-2 text-right font-semibold">
+                  <td colSpan={3} className="py-2 text-right font-semibold sm:hidden">
+                    Grand Total
+                  </td>
+                  <td colSpan={4} className="py-2 text-right font-semibold hidden sm:table-cell">
                     Grand Total
                   </td>
                   <td className="py-2 text-right font-bold text-lg">

@@ -150,11 +150,11 @@ export default async function AuditDetailPage({
       </nav>
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">
-          {template?.name ?? "Audit"} — {store?.name ?? "Unknown Store"}
-        </h1>
-        <div className="flex items-center gap-3">
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h1 className="text-2xl font-bold">
+            {template?.name ?? "Audit"} — {store?.name ?? "Unknown Store"}
+          </h1>
           <Badge
             variant="status"
             style={
@@ -165,6 +165,8 @@ export default async function AuditDetailPage({
           >
             {isCompleted ? "Completed" : "In Progress"}
           </Badge>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           {isCompleted && (
             <ExportAuditPdfButton
               audit={{

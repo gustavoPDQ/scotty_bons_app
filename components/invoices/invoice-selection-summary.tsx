@@ -158,9 +158,9 @@ export function InvoiceSelectableList({
                   <tr className="border-b text-left">
                     <th className="pb-2 font-medium">Product</th>
                     <th className="pb-2 font-medium">Modifier</th>
-                    <th className="pb-2 font-medium text-right">Unit Price</th>
-                    <th className="pb-2 font-medium text-right">Total Qty</th>
-                    <th className="pb-2 font-medium text-right">Total Value</th>
+                    <th className="pb-2 font-medium text-right hidden sm:table-cell">Unit Price</th>
+                    <th className="pb-2 font-medium text-right pr-4">Qty</th>
+                    <th className="pb-2 font-medium text-right">Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -170,10 +170,10 @@ export function InvoiceSelectableList({
                       <td className="py-2 text-muted-foreground">
                         {item.modifier}
                       </td>
-                      <td className="py-2 text-right">
+                      <td className="py-2 text-right hidden sm:table-cell">
                         {formatPrice(item.unit_price)}
                       </td>
-                      <td className="py-2 text-right">{item.total_qty}</td>
+                      <td className="py-2 text-right pr-4">{item.total_qty}</td>
                       <td className="py-2 text-right font-medium">
                         {formatPrice(item.total_value)}
                       </td>
@@ -182,7 +182,10 @@ export function InvoiceSelectableList({
                 </tbody>
                 <tfoot>
                   <tr className="border-t">
-                    <td colSpan={4} className="py-1.5 text-right text-muted-foreground">
+                    <td colSpan={3} className="py-1.5 text-right text-muted-foreground sm:hidden">
+                      Subtotal
+                    </td>
+                    <td colSpan={4} className="py-1.5 text-right text-muted-foreground hidden sm:table-cell">
                       Subtotal
                     </td>
                     <td className="py-1.5 text-right font-medium">
@@ -190,7 +193,10 @@ export function InvoiceSelectableList({
                     </td>
                   </tr>
                   <tr>
-                    <td colSpan={4} className="py-1.5 text-right text-muted-foreground">
+                    <td colSpan={3} className="py-1.5 text-right text-muted-foreground sm:hidden">
+                      HST ({(hstRate * 100).toFixed(0)}%)
+                    </td>
+                    <td colSpan={4} className="py-1.5 text-right text-muted-foreground hidden sm:table-cell">
                       HST ({(hstRate * 100).toFixed(0)}%)
                     </td>
                     <td className="py-1.5 text-right font-medium">
@@ -199,7 +205,10 @@ export function InvoiceSelectableList({
                   </tr>
                   {adFee > 0 && (
                     <tr>
-                      <td colSpan={4} className="py-1.5 text-right text-muted-foreground">
+                      <td colSpan={3} className="py-1.5 text-right text-muted-foreground sm:hidden">
+                        Ad &amp; Royalties Fee
+                      </td>
+                      <td colSpan={4} className="py-1.5 text-right text-muted-foreground hidden sm:table-cell">
                         Ad &amp; Royalties Fee
                       </td>
                       <td className="py-1.5 text-right font-medium">
@@ -208,7 +217,10 @@ export function InvoiceSelectableList({
                     </tr>
                   )}
                   <tr className="border-t-2">
-                    <td colSpan={4} className="py-2 text-right font-semibold">
+                    <td colSpan={3} className="py-2 text-right font-semibold sm:hidden">
+                      Grand Total
+                    </td>
+                    <td colSpan={4} className="py-2 text-right font-semibold hidden sm:table-cell">
                       Grand Total
                     </td>
                     <td className="py-2 text-right font-bold">

@@ -183,7 +183,7 @@ export function EditUserForm({ user, stores, currentUserId, onSuccess }: EditUse
             <div className="relative flex-1">
               <Input
                 type={showPassword ? "text" : "password"}
-                placeholder="New password (min 6 chars)"
+                placeholder="New password (min 6)"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 className="pr-10"

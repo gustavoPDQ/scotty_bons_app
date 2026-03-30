@@ -53,16 +53,16 @@ export function OrderListWithSelection({ orders }: OrderListWithSelectionProps) 
                   )}
                   <Link
                     href={`/orders/${order.id}`}
-                    className="flex flex-1 items-center gap-3 px-4 py-4"
+                    className="flex flex-1 items-center gap-3 px-4 py-4 min-w-0"
                   >
-                    {/* Orange icon */}
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-light">
+                    {/* Orange icon — hidden on small screens */}
+                    <div className="hidden sm:flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-light">
                       <Package className="size-5 text-primary" />
                     </div>
 
                     {/* Order info */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                         <p className="text-sm font-semibold">
                           {order.order_number}
                         </p>
@@ -70,7 +70,7 @@ export function OrderListWithSelection({ orders }: OrderListWithSelectionProps) 
                           {STATUS_LABELS[status]}
                         </Badge>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
                         {new Intl.DateTimeFormat("en-CA", {
                           dateStyle: "medium",
                           timeStyle: "short",

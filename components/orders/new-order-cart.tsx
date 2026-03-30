@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useReducer, useRef, useState, useTransition } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Minus, Package, Plus, ShoppingCart, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -18,6 +19,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // ── Cart types (keyed by modifier_id) ────────────────────────────────────────
 
@@ -98,6 +104,7 @@ export function NewOrderCart({ categories, products, storeId, stores }: NewOrder
   const [cart, dispatch] = useReducer(cartReducer, { items: new Map() });
   const [activeCategory, setActiveCategory] = useState<string>("");
   const [selectedStoreId, setSelectedStoreId] = useState<string>(storeId ?? "");
+  const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null);
   const isAdmin = !!stores;
   const observerRef = useRef<IntersectionObserver | null>(null);
 
@@ -253,15 +260,30 @@ export function NewOrderCart({ categories, products, storeId, stores }: NewOrder
               {cartItems.map((item) => (
                 <div
                   key={item.modifier_id}
-                  className="flex items-center justify-between gap-3 px-4 py-3"
+                  className="px-4 py-3 space-y-2"
                 >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{item.product_name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatPrice(item.unit_price)} · {item.modifier_label}
-                    </p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{item.product_name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatPrice(item.unit_price)} · {item.modifier_label}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 shrink-0 text-destructive hover:text-destructive"
+                      onClick={() =>
+                        dispatch({
+                          type: "REMOVE_ITEM",
+                          payload: { modifier_id: item.modifier_id },
+                        })
+                      }
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1">
                       <Button
                         variant="outline"
@@ -295,7 +317,7 @@ export function NewOrderCart({ categories, products, storeId, stores }: NewOrder
                             });
                           }
                         }}
-                        className="w-16 text-center h-8"
+                        className="w-14 text-center h-8"
                       />
                       <Button
                         variant="outline"
@@ -314,22 +336,9 @@ export function NewOrderCart({ categories, products, storeId, stores }: NewOrder
                         <Plus className="size-3" />
                       </Button>
                     </div>
-                    <span className="text-sm font-medium w-24 text-right">
+                    <span className="text-sm font-semibold">
                       {formatPrice(item.unit_price * item.quantity)}
                     </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-8 text-destructive hover:text-destructive"
-                      onClick={() =>
-                        dispatch({
-                          type: "REMOVE_ITEM",
-                          payload: { modifier_id: item.modifier_id },
-                        })
-                      }
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
                   </div>
                 </div>
               ))}
@@ -411,7 +420,25 @@ export function NewOrderCart({ categories, products, storeId, stores }: NewOrder
                         key={modifier.id}
                         className="flex items-center gap-3 px-4 py-3"
                       >
-                        <Package className="size-4 text-muted-foreground shrink-0" />
+                        {product.image_url ? (
+                          <button
+                            type="button"
+                            onClick={() => setLightbox({ url: product.image_url!, name: product.name })}
+                            className="shrink-0"
+                          >
+                            <Image
+                              src={product.image_url}
+                              alt={product.name}
+                              width={40}
+                              height={40}
+                              className="size-10 rounded-md object-cover"
+                            />
+                          </button>
+                        ) : (
+                          <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
+                            <Package className="size-4 text-muted-foreground" />
+                          </div>
+                        )}
                         <div className="flex-1 min-w-0">
                           <span className="text-sm font-medium">{product.name}</span>
                           <p className="text-xs text-muted-foreground">
@@ -501,6 +528,22 @@ export function NewOrderCart({ categories, products, storeId, stores }: NewOrder
           </p>
         )}
       </div>
+
+      {/* Image lightbox */}
+      <Dialog open={!!lightbox} onOpenChange={() => setLightbox(null)}>
+        <DialogContent className="max-w-md p-2 sm:p-4">
+          <DialogTitle className="sr-only">{lightbox?.name}</DialogTitle>
+          {lightbox && (
+            <Image
+              src={lightbox.url}
+              alt={lightbox.name}
+              width={400}
+              height={400}
+              className="w-full h-auto rounded-md object-contain"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

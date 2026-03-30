@@ -194,15 +194,15 @@ export function UsersPageClient({
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <div className="space-y-1">
-            <CardTitle>Users & Stores</CardTitle>
-            <CardDescription>
-              {stores.length} store{stores.length !== 1 ? "s" : ""},{" "}
-              {users.length} user{users.length !== 1 ? "s" : ""}
-            </CardDescription>
-          </div>
-          <div className="flex items-center gap-2">
+        <CardHeader className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="space-y-1">
+              <CardTitle>Users & Stores</CardTitle>
+              <CardDescription>
+                {stores.length} store{stores.length !== 1 ? "s" : ""},{" "}
+                {users.length} user{users.length !== 1 ? "s" : ""}
+              </CardDescription>
+            </div>
             <Button
               variant="ghost"
               size="sm"
@@ -210,6 +210,8 @@ export function UsersPageClient({
             >
               {expandedStores.size > 0 ? "Collapse All" : "Expand All"}
             </Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             <Dialog open={isCreateStoreOpen} onOpenChange={setIsCreateStoreOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -425,12 +427,12 @@ function UserRowItem({
   onActionComplete: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between pl-14 pr-4 py-2.5">
-      <div className="flex items-center gap-3 min-w-0">
+    <div className="flex items-center justify-between pl-8 sm:pl-14 pr-4 py-2.5">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
         <User className="size-4 text-muted-foreground shrink-0" />
         <div className="min-w-0">
-          <span className="text-sm font-medium">{user.name}</span>
-          <p className="text-xs text-muted-foreground">{user.email}</p>
+          <span className="text-sm font-medium truncate block">{user.name}</span>
+          <p className="text-xs text-muted-foreground truncate">{user.email}</p>
         </div>
       </div>
       <div className="flex items-center gap-3 shrink-0">
@@ -442,7 +444,7 @@ function UserRowItem({
                 : "size-2 rounded-full bg-muted-foreground/40"
             }
           />
-          <span className="text-muted-foreground">
+          <span className="text-muted-foreground hidden sm:inline">
             {user.is_active ? "Active" : "Inactive"}
           </span>
         </span>

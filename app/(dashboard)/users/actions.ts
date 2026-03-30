@@ -41,12 +41,13 @@ export async function createUser(
 
   const adminClient = createAdminClient();
 
-  // Create auth user — no password set; user must use Forgot Password to sign in
+  // Create auth user — password is optional; if not set, user must use Forgot Password
   const { data: authData, error: authError } =
     await adminClient.auth.admin.createUser({
       email: safeValues.email,
       email_confirm: true,
       user_metadata: { name: safeValues.name },
+      ...(safeValues.password ? { password: safeValues.password } : {}),
     });
 
   if (authError) {

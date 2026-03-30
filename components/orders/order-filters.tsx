@@ -78,21 +78,9 @@ export function OrderFilters({ role, stores }: OrderFiltersProps) {
 
   return (
     <div
-      className={`grid items-end gap-3 ${isPending ? "opacity-60" : ""}`}
-      style={{
-        gridTemplateColumns: [
-          "1fr",           // Status
-          "1fr",           // From
-          "1fr",           // To
-          role !== "store" && stores.length > 0 ? "1fr" : null, // Store
-          "2fr",           // Search
-          hasFilters ? "auto" : null, // Clear
-        ]
-          .filter(Boolean)
-          .join(" "),
-      }}
+      className={`flex flex-wrap items-end gap-3 ${isPending ? "opacity-60" : ""}`}
     >
-      <div>
+      <div className="w-[calc(50%-6px)] sm:w-auto sm:min-w-[120px]">
         <label className="text-xs font-medium text-muted-foreground mb-1 block">
           Status
         </label>
@@ -114,7 +102,7 @@ export function OrderFilters({ role, stores }: OrderFiltersProps) {
         </Select>
       </div>
 
-      <div>
+      <div className="w-[calc(50%-6px)] sm:w-auto sm:min-w-[140px]">
         <label className="text-xs font-medium text-muted-foreground mb-1 block">
           From
         </label>
@@ -126,7 +114,7 @@ export function OrderFilters({ role, stores }: OrderFiltersProps) {
         />
       </div>
 
-      <div>
+      <div className="w-[calc(50%-6px)] sm:w-auto sm:min-w-[140px]">
         <label className="text-xs font-medium text-muted-foreground mb-1 block">
           To
         </label>
@@ -139,7 +127,7 @@ export function OrderFilters({ role, stores }: OrderFiltersProps) {
       </div>
 
       {role !== "store" && stores.length > 0 && (
-        <div>
+        <div className="w-[calc(50%-6px)] sm:w-auto sm:min-w-[140px]">
           <label className="text-xs font-medium text-muted-foreground mb-1 block">
             Store
           </label>
@@ -164,7 +152,7 @@ export function OrderFilters({ role, stores }: OrderFiltersProps) {
         </div>
       )}
 
-      <div>
+      <div className="w-full sm:w-auto sm:flex-1 sm:min-w-[180px]">
         <label className="text-xs font-medium text-muted-foreground mb-1 block">
           Search
         </label>

@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -123,6 +124,18 @@ export function TemplatesClient({ templates, allCategories, allItems }: Template
 
   return (
     <>
+      <nav className="text-sm flex items-center gap-1.5">
+        <Link
+          href="/audits"
+          className="text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
+        >
+          <ArrowLeft className="size-3.5" />
+          Audits
+        </Link>
+        <span className="text-muted-foreground">/</span>
+        <span className="font-medium">Templates</span>
+      </nav>
+
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Audit Templates</h1>
         <Button onClick={handleCreate}>
@@ -146,24 +159,26 @@ export function TemplatesClient({ templates, allCategories, allItems }: Template
           {templates.map((template) => (
             <Card key={template.id} className={!template.is_active ? "opacity-60" : ""}>
               <CardContent className="py-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium">{template.name}</p>
-                      <Badge variant={template.is_active ? "default" : "secondary"}>
-                        {template.is_active ? "Active" : "Inactive"}
-                      </Badge>
-                    </div>
-                    {template.description && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {template.description}
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium">{template.name}</p>
+                        <Badge variant={template.is_active ? "default" : "secondary"}>
+                          {template.is_active ? "Active" : "Inactive"}
+                        </Badge>
+                      </div>
+                      {template.description && (
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {template.description}
+                        </p>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {template.item_count} {template.item_count === 1 ? "item" : "items"}
                       </p>
-                    )}
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {template.item_count} {template.item_count === 1 ? "item" : "items"}
-                    </p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">Active</span>
                       <Switch
@@ -172,22 +187,24 @@ export function TemplatesClient({ templates, allCategories, allItems }: Template
                         disabled={isPending}
                       />
                     </div>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => handleEdit(template)}
-                      disabled={isPending}
-                    >
-                      <Pencil className="size-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setDeletingTemplate(template)}
-                      disabled={isPending}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
+                    <div className="flex items-center gap-2 ml-auto">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => handleEdit(template)}
+                        disabled={isPending}
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setDeletingTemplate(template)}
+                        disabled={isPending}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </CardContent>

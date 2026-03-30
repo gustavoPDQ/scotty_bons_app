@@ -136,18 +136,20 @@ export function CatalogAdmin({ products, categories }: CatalogAdminProps) {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <div className="space-y-1">
-            <CardTitle>Products</CardTitle>
-            <CardDescription>
-              {categories.length} categor{categories.length !== 1 ? "ies" : "y"},{" "}
-              {totalProducts} product{totalProducts !== 1 ? "s" : ""}
-            </CardDescription>
-          </div>
-          <div className="flex items-center gap-2">
+        <CardHeader className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="space-y-1">
+              <CardTitle>Products</CardTitle>
+              <CardDescription>
+                {categories.length} categor{categories.length !== 1 ? "ies" : "y"},{" "}
+                {totalProducts} product{totalProducts !== 1 ? "s" : ""}
+              </CardDescription>
+            </div>
             <Button variant="ghost" size="sm" onClick={expanded.size > 0 ? collapseAll : expandAll}>
               {expanded.size > 0 ? "Collapse All" : "Expand All"}
             </Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             <Dialog open={isCreateCategoryOpen} onOpenChange={setIsCreateCategoryOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm">
