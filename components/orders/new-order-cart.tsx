@@ -429,14 +429,14 @@ export function NewOrderCart({ categories, products, storeId, stores }: NewOrder
                             <Image
                               src={product.image_url}
                               alt={product.name}
-                              width={40}
-                              height={40}
-                              className="size-10 rounded-md object-cover"
+                              width={48}
+                              height={48}
+                              className="size-12 rounded-md object-cover"
                             />
                           </button>
                         ) : (
-                          <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
-                            <Package className="size-4 text-muted-foreground" />
+                          <div className="flex size-12 shrink-0 items-center justify-center rounded-md bg-muted">
+                            <Package className="size-5 text-muted-foreground" />
                           </div>
                         )}
                         <div className="flex-1 min-w-0">

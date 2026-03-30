@@ -4,14 +4,21 @@ const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
 
+export interface EmailAttachment {
+  content: Buffer;
+  filename: string;
+}
+
 export async function sendEmail({
   to,
   subject,
   html,
+  attachments,
 }: {
   to: string | string[];
   subject: string;
   html: string;
+  attachments?: EmailAttachment[];
 }): Promise<void> {
   console.log("[email] sendEmail called:", { to, subject, hasResend: !!resend });
 
@@ -26,6 +33,7 @@ export async function sendEmail({
       to: Array.isArray(to) ? to : [to],
       subject,
       html,
+      attachments,
     });
     console.log("[email] Sent successfully:", result);
   } catch (error) {

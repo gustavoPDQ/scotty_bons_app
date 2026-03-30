@@ -129,6 +129,12 @@ export async function createOrder(
         orderData?.order_number ?? orderId.slice(0, 8),
         storeData?.name ?? "Unknown Store",
         parsed.data.items.length,
+        parsed.data.items.map((i) => ({
+          product_name: i.product_name,
+          modifier: i.modifier_label,
+          quantity: i.quantity,
+          unit_price: i.unit_price,
+        })),
       );
     }
   } catch (e) {
@@ -261,6 +267,12 @@ export async function adminCreateOrder(
       order.order_number,
       storeData?.name ?? "Unknown Store",
       parsed.data.items.length,
+      parsed.data.items.map((i) => ({
+        product_name: i.product_name,
+        modifier: i.modifier_label,
+        quantity: i.quantity,
+        unit_price: i.unit_price,
+      })),
     );
   } catch (e) {
     console.error("[email] Failed to notify order submitted:", e);

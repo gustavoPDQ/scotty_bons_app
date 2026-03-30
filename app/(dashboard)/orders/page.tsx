@@ -191,7 +191,7 @@ export default async function OrdersPage({
         <h1 className="text-xl font-bold">
           {isStore ? "Recent Orders" : "Orders"}
         </h1>
-        {!isStore && (
+        {role === "admin" && (
           <Button asChild size="sm">
             <Link href="/orders/new">
               <Plus className="size-4 mr-1.5" />

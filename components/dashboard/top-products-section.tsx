@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatPrice } from "@/lib/utils";
+import { ExportTopProductsDialog } from "@/components/dashboard/export-top-products-dialog";
 
 export interface ProductAggregate {
   name: string;
@@ -28,12 +29,20 @@ interface TopProductsSectionProps {
   stores: { id: string; name: string }[];
   productsByStore: Record<string, ProductAggregate[]>;
   categoriesByStore: Record<string, CategoryAggregate[]>;
+  categoryNames: string[];
+  productNames: string[];
+  productCategoryMap: Record<string, string>;
+  currentRange: string;
 }
 
 export function TopProductsSection({
   stores,
   productsByStore,
   categoriesByStore,
+  categoryNames,
+  productNames,
+  productCategoryMap,
+  currentRange,
 }: TopProductsSectionProps) {
   const [storeFilter, setStoreFilter] = useState("all");
 
@@ -46,8 +55,17 @@ export function TopProductsSection({
   return (
     <Card>
       <CardContent className="p-5">
-        <div className="flex items-center justify-between gap-4 mb-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
           <h2 className="text-lg font-semibold">Top Categories & Products</h2>
+          <div className="flex items-center gap-2">
+            <ExportTopProductsDialog
+              stores={stores}
+              categoryNames={categoryNames}
+              productNames={productNames}
+              productCategoryMap={productCategoryMap}
+              currentStoreFilter={storeFilter}
+              currentRange={currentRange}
+            />
           <Select value={storeFilter} onValueChange={setStoreFilter}>
             <SelectTrigger className="w-48">
               <SelectValue placeholder="All Stores" />
@@ -61,6 +79,7 @@ export function TopProductsSection({
               ))}
             </SelectContent>
           </Select>
+          </div>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">

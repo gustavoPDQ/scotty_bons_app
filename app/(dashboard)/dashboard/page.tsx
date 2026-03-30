@@ -529,6 +529,12 @@ export default async function DashboardPage({
           .sort((a, b) => a.name.localeCompare(b.name))}
         productsByStore={productsByStore}
         categoriesByStore={categoriesByStore}
+        categoryNames={categories.map((c) => c.name).sort()}
+        productNames={[...new Set(products.map((p) => p.name))].sort()}
+        productCategoryMap={Object.fromEntries(
+          products.map((p) => [p.name, categoryNameMap[p.category_id] ?? "Uncategorized"]),
+        )}
+        currentRange={rangeKey}
       />
     </div>
   );

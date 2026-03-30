@@ -34,15 +34,15 @@ export async function notifyUserCreated({
       <p>Hi ${safeName},</p>
       <p>An account has been created for you on Scotty Ops with the role <strong>${roleLabel}</strong>.</p>
       ${storeInfo}
-      <p>To get started, please set your password by clicking the button below.</p>
+      <p>Your password will be provided by an administrator. Once you have it, you can sign in using the button below.</p>
     `,
-    ctaText: "Set Your Password",
-    ctaUrl: `${appUrl()}/forgot-password`,
+    ctaText: "Go to Scotty Ops",
+    ctaUrl: `${appUrl()}/login`,
   });
 
   await sendEmail({
     to: email,
-    subject: "Welcome to Scotty Ops — Set Your Password",
+    subject: "Welcome to Scotty Ops",
     html,
   });
 }

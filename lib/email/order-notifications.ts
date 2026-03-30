@@ -1,7 +1,8 @@
-import { sendEmail } from "./client";
+import { sendEmail, type EmailAttachment } from "./client";
 import { notificationEmail } from "./templates";
 import { escapeHtml } from "./escape-html";
 import { createClient } from "@/lib/supabase/server";
+import { generateOrderPdfBuffer } from "@/lib/pdf/generate-pdf-buffer";
 
 const appUrl = () => process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -30,6 +31,7 @@ export async function notifyOrderSubmitted(
   orderNumber: string,
   storeName: string,
   itemCount: number,
+  orderItems?: { product_name: string; modifier: string; quantity: number; unit_price: number }[],
 ): Promise<void> {
   console.log("[email] notifyOrderSubmitted called:", { orderId, orderNumber, storeName, itemCount });
   const adminEmails = await getEmailsByRole("admin");
@@ -50,10 +52,25 @@ export async function notifyOrderSubmitted(
     ctaUrl: `${appUrl()}/orders/${encodeURIComponent(orderId)}`,
   });
 
+  const attachments: EmailAttachment[] = [];
+  if (orderItems && orderItems.length > 0) {
+    try {
+      const pdfBuffer = generateOrderPdfBuffer(
+        { order_number: orderNumber, status: "submitted", created_at: new Date().toISOString() },
+        orderItems,
+        storeName,
+      );
+      attachments.push({ content: pdfBuffer, filename: `${orderNumber}.pdf` });
+    } catch (e) {
+      console.error("[email] Failed to generate order PDF attachment:", e);
+    }
+  }
+
   await sendEmail({
     to: adminEmails,
     subject: `New Order Submitted — ${storeName}`,
     html,
+    attachments: attachments.length > 0 ? attachments : undefined,
   });
 }
 
@@ -63,6 +80,7 @@ export async function notifyOrderApproved(
   storeName: string,
   submittedByUserId: string,
   itemCount: number,
+  orderItems?: { product_name: string; modifier: string; quantity: number; unit_price: number }[],
 ): Promise<void> {
   const [submitterEmail, commissaryEmails] = await Promise.all([
     getUserEmail(submittedByUserId),
@@ -72,7 +90,7 @@ export async function notifyOrderApproved(
   const safeNum = escapeHtml(orderNumber);
   const safeName = escapeHtml(storeName);
 
-  // Notify submitter
+  // Notify submitter (NO PDF attachment for store)
   if (submitterEmail) {
     const html = notificationEmail({
       title: "Order Approved",
@@ -88,8 +106,22 @@ export async function notifyOrderApproved(
     });
   }
 
-  // Notify commissary
+  // Notify commissary (WITH PDF attachment)
   if (commissaryEmails.length > 0) {
+    const attachments: EmailAttachment[] = [];
+    if (orderItems && orderItems.length > 0) {
+      try {
+        const pdfBuffer = generateOrderPdfBuffer(
+          { order_number: orderNumber, status: "approved", created_at: new Date().toISOString() },
+          orderItems,
+          storeName,
+        );
+        attachments.push({ content: pdfBuffer, filename: `${orderNumber}.pdf` });
+      } catch (e) {
+        console.error("[email] Failed to generate order PDF attachment:", e);
+      }
+    }
+
     const html = notificationEmail({
       title: "Order Approved — Ready for Fulfillment",
       body: `
@@ -105,6 +137,7 @@ export async function notifyOrderApproved(
       to: commissaryEmails,
       subject: "Order Approved — Ready for Fulfillment",
       html,
+      attachments: attachments.length > 0 ? attachments : undefined,
     });
   }
 }

@@ -187,6 +187,30 @@ export async function completeAudit(
       (conductorUser?.user_metadata?.name as string | undefined) ??
       conductorUser?.email ??
       "Unknown";
+    // Fetch categories, items, and responses for PDF attachment
+    const [{ data: cats }, { data: tplItems }, { data: responses }] = await Promise.all([
+      auth.supabase.from("audit_template_categories").select("id, name, sort_order").eq("template_id", audit.template_id).order("sort_order"),
+      auth.supabase.from("audit_template_items").select("id, category_id, label, sort_order").eq("template_id", audit.template_id).order("sort_order"),
+      auth.supabase.from("audit_responses").select("template_item_id, rating, notes").eq("audit_id", audit.id),
+    ]);
+
+    const responseMap: Record<string, { rating: string; notes: string | null }> = {};
+    for (const r of responses ?? []) {
+      responseMap[r.template_item_id] = { rating: r.rating, notes: r.notes };
+    }
+
+    const pdfCategories = (cats ?? []).map((cat) => ({
+      name: cat.name,
+      items: (tplItems ?? [])
+        .filter((i) => i.category_id === cat.id)
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((i) => ({
+          label: i.label,
+          rating: (responseMap[i.id]?.rating as import("@/lib/types").AuditRating) ?? null,
+          notes: responseMap[i.id]?.notes ?? null,
+        })),
+    }));
+
     await notifyAuditCompleted({
       auditId: audit.id,
       storeId: audit.store_id,
@@ -194,6 +218,8 @@ export async function completeAudit(
       templateName: templateData?.name ?? "Audit",
       score,
       conductorName,
+      auditData: { score, conducted_at: new Date().toISOString(), notes: parsed.data.notes ?? null },
+      categories: pdfCategories,
     });
   } catch (e) {
     console.error("[email] Failed to notify audit completed:", e);

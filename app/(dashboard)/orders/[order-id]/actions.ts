@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { TERMINAL_STATUSES } from "@/lib/constants/order-status";
 import type { ActionResult, OrderStatus } from "@/lib/types";
 import {
@@ -85,11 +86,20 @@ export async function updateOrderStatus(
   // Email notifications (awaited so they complete before response ends)
   try {
     if (newStatus === "approved") {
-      const [{ data: storeData }, { count: itemCount }] = await Promise.all([
+      const [{ data: storeData }, { count: itemCount }, { data: orderItems }] = await Promise.all([
         supabase.from("stores").select("name").eq("id", order.store_id).single(),
         supabase.from("order_items").select("id", { count: "exact", head: true }).eq("order_id", orderId),
+        supabase.from("order_items").select("product_name, modifier, quantity, unit_price").eq("order_id", orderId),
       ]);
-      await notifyOrderApproved(orderId, order.order_number, storeData?.name ?? "Unknown", order.submitted_by, itemCount ?? 0);
+      await notifyOrderApproved(
+        orderId, order.order_number, storeData?.name ?? "Unknown", order.submitted_by, itemCount ?? 0,
+        (orderItems ?? []).map((i) => ({
+          product_name: i.product_name,
+          modifier: i.modifier,
+          quantity: i.quantity,
+          unit_price: Number(i.unit_price),
+        })),
+      );
     } else if (newStatus === "declined") {
       await notifyOrderDeclined(orderId, order.order_number, order.submitted_by, declineReason ?? null);
     }
@@ -141,8 +151,42 @@ export async function deleteOrder(
     if (error || count === 0) {
       return { data: null, error: "Order not found or cannot be deleted." };
     }
-  } else if (["admin", "commissary"].includes(role)) {
-    // Admin/commissary can delete any non-fulfilled order
+  } else if (role === "admin") {
+    // Admin can delete any order regardless of status
+    // If the order has an invoice, delete it first (uses service role to bypass RLS)
+    const adminClient = createAdminClient();
+    const { data: invoice } = await adminClient
+      .from("invoices")
+      .select("id")
+      .eq("order_id", orderId)
+      .maybeSingle();
+
+    if (invoice) {
+      // invoice_items cascade on invoice delete
+      const { error: invoiceDeleteError } = await adminClient
+        .from("invoices")
+        .delete()
+        .eq("id", invoice.id);
+
+      if (invoiceDeleteError) {
+        return { data: null, error: "Failed to delete associated invoice." };
+      }
+    }
+
+    // Use admin client to bypass RLS for soft-deleting fulfilled orders
+    const { error, count } = await adminClient
+      .from("orders")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", orderId)
+      .is("deleted_at", null);
+
+    if (error || count === 0) {
+      return { data: null, error: "Order not found or cannot be deleted." };
+    }
+
+    revalidatePath("/invoices");
+  } else if (role === "commissary") {
+    // Commissary can delete any non-fulfilled order
     const { error, count } = await supabase
       .from("orders")
       .update({ deleted_at: new Date().toISOString() })

@@ -20,21 +20,25 @@ interface DeleteOrderButtonProps {
   orderId: string;
   currentStatus: OrderStatus;
   role: string;
+  hasInvoice?: boolean;
 }
 
 export function DeleteOrderButton({
   orderId,
   currentStatus,
   role,
+  hasInvoice = false,
 }: DeleteOrderButtonProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  // Admin/commissary: can delete if not fulfilled
+  // Admin: can delete any order regardless of status
+  // Commissary: can delete if not fulfilled
   // Store: can delete own submitted orders
   const canDelete =
-    (["admin", "commissary"].includes(role) && currentStatus !== "fulfilled") ||
+    role === "admin" ||
+    (role === "commissary" && currentStatus !== "fulfilled") ||
     (role === "store" && currentStatus === "submitted");
 
   if (!canDelete) {
@@ -70,6 +74,11 @@ export function DeleteOrderButton({
             <DialogDescription>
               This order will be removed from the system and will no longer be
               visible to any user.
+              {hasInvoice && (
+                <span className="block mt-2 font-medium text-destructive">
+                  The associated invoice will also be permanently deleted.
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

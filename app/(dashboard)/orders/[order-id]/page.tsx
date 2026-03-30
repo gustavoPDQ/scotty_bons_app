@@ -106,16 +106,14 @@ export default async function OrderDetailPage({
   const statusHistory = history ?? [];
   const status = order.status as OrderStatus;
 
-  // Check for linked invoice if fulfilled
+  // Check for linked invoice (fulfilled orders have invoices)
   let invoiceId: string | null = null;
-  if (status === "fulfilled") {
-    const { data: invoice } = await supabase
-      .from("invoices")
-      .select("id")
-      .eq("order_id", order.id)
-      .single();
-    invoiceId = invoice?.id ?? null;
-  }
+  const { data: invoice } = await supabase
+    .from("invoices")
+    .select("id")
+    .eq("order_id", order.id)
+    .maybeSingle();
+  invoiceId = invoice?.id ?? null;
 
   // Fetch financial settings for tax/fee calculation
   const { data: financialSettings } = await supabase
@@ -215,6 +213,7 @@ export default async function OrderDetailPage({
               orderId={order.id}
               currentStatus={status}
               role={profile.role}
+              hasInvoice={!!invoiceId}
             />
           </div>
         </div>

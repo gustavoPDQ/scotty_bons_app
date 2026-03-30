@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { INVOICE_LOGO_BASE64 } from "./invoice-logo";
 
 interface InvoiceData {
   invoice_number: string;
@@ -35,74 +36,87 @@ export function generateInvoicePdf(
   const doc = new jsPDF();
   const dateFmt = new Intl.DateTimeFormat("en-CA", { dateStyle: "long" });
   const fmt = (v: number) => `$${Number(v).toFixed(2)}`;
-  let y = 14;
+  const rightX = 196;
+  const midX = 110;
 
-  // From (commissary)
-  if (invoice.company_name) {
-    doc.setFontSize(8);
-    doc.setTextColor(130);
-    doc.text("From", 14, y);
-    y += 5;
-    doc.setFontSize(14);
-    doc.setTextColor(0);
-    doc.text(invoice.company_name, 14, y);
-    y += 6;
-    doc.setFontSize(9);
-    doc.setTextColor(80);
-    if (invoice.company_address) {
-      const lines = doc.splitTextToSize(invoice.company_address, 90) as string[];
-      lines.forEach((line: string) => {
-        doc.text(line, 14, y);
-        y += 4.5;
-      });
-    }
-    if (invoice.company_tax_id) {
-      doc.text(`Ph# ${invoice.company_tax_id}`, 14, y);
-      y += 4.5;
-    }
-  }
-
-  // Invoice number & date (top-right)
-  doc.setFontSize(16);
+  // ── Header: Logo + brand name (left) / Invoice number + date (right) ──
+  doc.addImage(INVOICE_LOGO_BASE64, "PNG", 14, 11, 16, 16);
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
   doc.setTextColor(0);
-  doc.text(invoice.invoice_number, 196, 19, { align: "right" });
-  doc.setFontSize(9);
-  doc.setTextColor(100);
-  doc.text(dateFmt.format(new Date(invoice.created_at)), 196, 25, {
+  doc.text("Scotty Bons", 32, 18);
+  doc.text("Caribbean Grill", 32, 24);
+
+  doc.setFontSize(13);
+  doc.text(`Invoice - ${invoice.invoice_number}`, rightX, 17, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(80);
+  doc.text(dateFmt.format(new Date(invoice.created_at)), rightX, 23, {
     align: "right",
   });
 
-  // Ship To
-  y = Math.max(y, 38) + 4;
-  doc.setFontSize(8);
-  doc.setTextColor(130);
-  doc.text("Ship to", 14, y);
-  y += 5;
+  // ── From (left) / Ship To (right) — side by side ──
+  let leftY = 38;
+  let rightY = 38;
+
+  // From
+  doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.setTextColor(0);
-  doc.text(invoice.store_business_name || invoice.store_name, 14, y);
-  y += 5;
-  doc.setFontSize(9);
-  doc.setTextColor(80);
-  if (invoice.store_address) {
-    const lines = doc.splitTextToSize(invoice.store_address, 90) as string[];
+  doc.text("From:", 14, leftY);
+  leftY += 6;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(60);
+  if (invoice.company_name) {
+    doc.text(invoice.company_name, 14, leftY);
+    leftY += 5;
+  }
+  if (invoice.company_address) {
+    const lines = doc.splitTextToSize(invoice.company_address, 80) as string[];
     lines.forEach((line: string) => {
-      doc.text(line, 14, y);
-      y += 4.5;
+      doc.text(line, 14, leftY);
+      leftY += 5;
+    });
+  }
+  if (invoice.company_tax_id) {
+    doc.text(`Ph# ${invoice.company_tax_id}`, 14, leftY);
+    leftY += 5;
+  }
+
+  // Ship To
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(0);
+  doc.text("Ship to:", midX, rightY);
+  rightY += 6;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(60);
+  doc.text(invoice.store_business_name || invoice.store_name, midX, rightY);
+  rightY += 5;
+  if (invoice.store_address) {
+    const lines = doc.splitTextToSize(invoice.store_address, 80) as string[];
+    lines.forEach((line: string) => {
+      doc.text(line, midX, rightY);
+      rightY += 5;
     });
   }
   if (invoice.store_postal_code) {
-    doc.text(invoice.store_postal_code, 14, y);
-    y += 4.5;
+    doc.text(invoice.store_postal_code, midX, rightY);
+    rightY += 5;
   }
   if (invoice.store_phone) {
-    doc.text(`Ph# ${invoice.store_phone}`, 14, y);
-    y += 4.5;
+    doc.text(invoice.store_phone, midX, rightY);
+    rightY += 5;
   }
   if (invoice.store_email) {
-    doc.text(invoice.store_email, 14, y);
-    y += 4.5;
+    doc.text(invoice.store_email, midX, rightY);
+    rightY += 5;
   }
+
+  let y = Math.max(leftY, rightY) + 4;
 
   // Items table
   y += 4;
