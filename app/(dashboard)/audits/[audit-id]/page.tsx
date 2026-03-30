@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { ArrowLeft, Pencil } from "lucide-react";
 import { ExportAuditPdfButton } from "@/components/audits/export-audit-pdf-button";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,17 +56,18 @@ export default async function AuditDetailPage({
   const isCompleted = !!audit.conducted_at;
 
   // Fetch related data in parallel
+  const admin = createAdminClient();
   const [
     { data: store },
     { data: template },
-    { data: conductor },
+    conductorResult,
     { data: templateCategories },
     { data: templateItems },
     { data: responses },
   ] = await Promise.all([
     supabase.from("stores").select("name").eq("id", audit.store_id).single(),
     supabase.from("audit_templates").select("name").eq("id", audit.template_id).single(),
-    supabase.from("profiles").select("full_name").eq("user_id", audit.conducted_by).single(),
+    admin.auth.admin.getUserById(audit.conducted_by),
     supabase
       .from("audit_template_categories")
       .select("id, template_id, name, sort_order, created_at")
@@ -81,6 +83,11 @@ export default async function AuditDetailPage({
       .select("id, audit_id, template_item_id, rating, notes")
       .eq("audit_id", auditId),
   ]);
+
+  const conductorName =
+    (conductorResult.data?.user?.user_metadata?.name as string | undefined) ??
+    conductorResult.data?.user?.email ??
+    "—";
 
   const categories = (templateCategories ?? []) as AuditTemplateCategoryRow[];
   const items = (templateItems ?? []) as AuditTemplateItemRow[];
@@ -176,7 +183,7 @@ export default async function AuditDetailPage({
               }))}
               storeName={store?.name ?? "Unknown Store"}
               templateName={template?.name ?? "Audit"}
-              conductorName={conductor?.full_name ?? "Unknown"}
+              conductorName={conductorName}
             />
           )}
           {canConduct && !isCompleted && (
@@ -200,7 +207,7 @@ export default async function AuditDetailPage({
             </div>
             <div>
               <dt className="text-muted-foreground">Conducted by</dt>
-              <dd className="font-medium">{conductor?.full_name ?? "—"}</dd>
+              <dd className="font-medium">{conductorName}</dd>
             </div>
             <div>
               <dt className="text-muted-foreground">Created</dt>

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { ActionResult } from "@/lib/types";
 import {
   createAuditSchema,
@@ -175,18 +176,24 @@ export async function completeAudit(
 
   // Notify store users and admins about completed audit
   try {
-    const [{ data: storeData }, { data: templateData }, { data: conductorProfile }] = await Promise.all([
+    const adminClient = createAdminClient();
+    const [{ data: storeData }, { data: templateData }, conductorResult] = await Promise.all([
       auth.supabase.from("stores").select("name").eq("id", audit.store_id).single(),
       auth.supabase.from("audit_templates").select("name").eq("id", audit.template_id).single(),
-      auth.supabase.from("profiles").select("full_name").eq("user_id", auth.userId).single(),
+      adminClient.auth.admin.getUserById(auth.userId),
     ]);
+    const conductorUser = conductorResult.data?.user;
+    const conductorName =
+      (conductorUser?.user_metadata?.name as string | undefined) ??
+      conductorUser?.email ??
+      "Unknown";
     await notifyAuditCompleted({
       auditId: audit.id,
       storeId: audit.store_id,
       storeName: storeData?.name ?? "Unknown Store",
       templateName: templateData?.name ?? "Audit",
       score,
-      conductorName: conductorProfile?.full_name ?? "Unknown",
+      conductorName,
     });
   } catch (e) {
     console.error("[email] Failed to notify audit completed:", e);

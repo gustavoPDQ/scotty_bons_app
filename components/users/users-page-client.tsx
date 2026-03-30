@@ -84,7 +84,7 @@ export function UsersPageClient({
     "_commissaries",
     ...(users.some((u) => u.role === "store" && (!u.store_id || !stores.some((s) => s.id === u.store_id))) ? ["_unassigned"] : []),
   ];
-  const [expandedStores, setExpandedStores] = useState<Set<string>>(new Set(allSectionIds));
+  const [expandedStores, setExpandedStores] = useState<Set<string>>(new Set());
 
   const refresh = () => router.refresh();
 

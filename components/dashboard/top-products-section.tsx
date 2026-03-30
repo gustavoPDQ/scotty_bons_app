@@ -78,11 +78,7 @@ export function TopProductsSection({
                 {categories.map((cat, idx) => (
                   <div key={cat.name} className="flex items-center gap-3">
                     <span
-                      className={`flex items-center justify-center size-7 rounded-full text-xs font-bold shrink-0 ${
-                        idx === 0
-                          ? "bg-primary text-white"
-                          : "bg-muted text-muted-foreground"
-                      }`}
+                      className="flex items-center justify-center size-7 rounded-full text-xs font-bold shrink-0 bg-muted text-muted-foreground"
                     >
                       {idx + 1}
                     </span>
@@ -132,11 +128,7 @@ export function TopProductsSection({
                     className="flex items-center gap-3"
                   >
                     <span
-                      className={`flex items-center justify-center size-7 rounded-full text-xs font-bold shrink-0 ${
-                        idx === 0
-                          ? "bg-primary text-white"
-                          : "bg-muted text-muted-foreground"
-                      }`}
+                      className="flex items-center justify-center size-7 rounded-full text-xs font-bold shrink-0 bg-muted text-muted-foreground"
                     >
                       {idx + 1}
                     </span>

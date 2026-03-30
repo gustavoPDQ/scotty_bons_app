@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatPrice } from "@/lib/utils";
+import { ExportInvoicePdfButton } from "@/components/invoices/export-invoice-pdf-button";
 
 export default async function InvoiceDetailPage({
   params,
@@ -62,6 +63,36 @@ export default async function InvoiceDetailPage({
         <span className="text-muted-foreground">/</span>
         <span className="font-medium">{invoice.invoice_number}</span>
       </nav>
+
+      <div className="flex justify-end">
+        <ExportInvoicePdfButton
+          invoice={{
+            invoice_number: invoice.invoice_number,
+            created_at: invoice.created_at,
+            company_name: invoice.company_name,
+            company_address: invoice.company_address,
+            company_tax_id: invoice.company_tax_id,
+            store_name: invoice.store_name,
+            store_business_name: invoice.store_business_name,
+            store_address: invoice.store_address,
+            store_postal_code: invoice.store_postal_code,
+            store_phone: invoice.store_phone,
+            store_email: invoice.store_email,
+            subtotal: Number(invoice.subtotal),
+            tax_rate: Number(invoice.tax_rate),
+            tax_amount: Number(invoice.tax_amount),
+            ad_royalties_fee: invoice.ad_royalties_fee ? Number(invoice.ad_royalties_fee) : null,
+            grand_total: Number(invoice.grand_total),
+          }}
+          items={invoiceItems.map((i) => ({
+            product_name: i.product_name,
+            modifier: i.modifier,
+            unit_price: Number(i.unit_price),
+            quantity: i.quantity,
+            line_total: Number(i.line_total),
+          }))}
+        />
+      </div>
 
       <Card>
         <CardContent className="pt-6 space-y-6">

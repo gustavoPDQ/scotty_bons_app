@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ClipboardCheck, Settings2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -93,15 +94,18 @@ export default async function AuditsPage({
       templateNames[t.id] = t.name;
     }
 
-    // Fetch conductor names
+    // Fetch conductor names from auth.users via admin API
     const conductorIds = [...new Set(auditsRaw.map((a) => a.conducted_by))];
-    const { data: conductors } = await supabase
-      .from("profiles")
-      .select("user_id, full_name")
-      .in("user_id", conductorIds);
+    const adminClient = createAdminClient();
+    const conductorResults = await Promise.all(
+      conductorIds.map((id) => adminClient.auth.admin.getUserById(id)),
+    );
     const conductorNames: Record<string, string> = {};
-    for (const c of conductors ?? []) {
-      conductorNames[c.user_id] = c.full_name;
+    for (const r of conductorResults) {
+      if (r.data?.user) {
+        const u = r.data.user;
+        conductorNames[u.id] = (u.user_metadata?.name as string | undefined) ?? u.email ?? "";
+      }
     }
 
     for (const a of auditsRaw) {
