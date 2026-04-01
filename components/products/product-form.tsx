@@ -125,8 +125,8 @@ export function ProductForm({ categories, product, defaultCategoryId, onSuccess 
         setRemoveImage(false);
         toast.success(isEditing ? "Product updated." : "Product created.");
         onSuccess();
-      } catch {
-        setFormError("Something went wrong. Please try again.");
+      } catch (err) {
+        setFormError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
       }
     });
   };
