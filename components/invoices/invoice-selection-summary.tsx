@@ -52,12 +52,14 @@ export function InvoiceSelectableList({
         }
         return next;
       });
+      setAggregated([]);
     },
     [],
   );
 
   const selectAll = useCallback(() => {
     setSelected(new Set(invoiceIds));
+    setAggregated([]);
   }, [invoiceIds]);
 
   const clearAll = useCallback(() => {

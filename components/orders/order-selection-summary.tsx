@@ -52,12 +52,14 @@ export function OrderSelectableList({
         }
         return next;
       });
+      setAggregated([]);
     },
     [],
   );
 
   const selectAll = useCallback(() => {
     setSelected(new Set(orderIds));
+    setAggregated([]);
   }, [orderIds]);
 
   const clearAll = useCallback(() => {
