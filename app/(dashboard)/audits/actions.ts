@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { z } from "zod";
 import type { ActionResult } from "@/lib/types";
 import {
   createAuditSchema,
@@ -13,6 +14,24 @@ import {
   type CompleteAuditValues,
 } from "@/lib/validations/audits";
 import { notifyAuditCompleted } from "@/lib/email/audit-notifications";
+
+/** Verifies the current session belongs to an admin. Returns the supabase client, or null. */
+async function verifyAdmin() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
+
+  if (profile?.role !== "admin") return null;
+  return supabase;
+}
 
 /** Verifies the current session belongs to an admin or commissary. Returns the supabase client and user id, or null. */
 async function verifyAdminOrCommissary() {
@@ -226,4 +245,50 @@ export async function completeAudit(
   }
 
   return { data: { score }, error: null };
+}
+
+const idSchema = z.string().uuid("Invalid ID.");
+
+export async function deleteAudit(
+  auditId: string
+): Promise<ActionResult<null>> {
+  const idParsed = idSchema.safeParse(auditId);
+  if (!idParsed.success) return { data: null, error: "Invalid audit ID." };
+
+  const supabase = await verifyAdmin();
+  if (!supabase) return { data: null, error: "Unauthorized." };
+
+  // Delete evidence files from storage
+  const { data: evidence } = await supabase
+    .from("audit_evidence")
+    .select("image_url")
+    .in(
+      "audit_response_id",
+      (await supabase.from("audit_responses").select("id").eq("audit_id", auditId)).data?.map((r) => r.id) ?? []
+    );
+
+  if (evidence && evidence.length > 0) {
+    const paths = evidence
+      .map((e) => {
+        const idx = e.image_url.indexOf("/audit-evidence/");
+        return idx !== -1 ? e.image_url.substring(idx + "/audit-evidence/".length) : null;
+      })
+      .filter(Boolean) as string[];
+    if (paths.length > 0) {
+      await supabase.storage.from("audit-evidence").remove(paths);
+    }
+  }
+
+  // Delete audit (CASCADE will remove responses and evidence records)
+  const { error } = await supabase
+    .from("audits")
+    .delete()
+    .eq("id", auditId);
+
+  if (error) {
+    return { data: null, error: "Failed to delete audit. Please try again." };
+  }
+
+  revalidatePath("/audits");
+  return { data: null, error: null };
 }

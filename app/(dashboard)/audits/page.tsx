@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { getScoreColor, getScoreLabel } from "@/lib/constants/audit-status";
 import type { AuditRow } from "@/lib/types";
 import { AuditFilters } from "@/components/audits/audit-filters";
+import { DeleteAuditButton } from "@/components/audits/delete-audit-button";
 import { NewAuditDialog } from "@/components/audits/new-audit-dialog";
 
 const isValidUUID = (u: string) =>
@@ -186,42 +187,52 @@ export default async function AuditsPage({
             const isCompleted = !!audit.conducted_at;
             return (
               <Card key={audit.id} className="hover:shadow-md transition-shadow">
-                <Link
-                  href={`/audits/${audit.id}`}
-                  className="flex items-center gap-3 px-4 py-4 min-w-0"
-                >
-                  <div className="hidden sm:flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-light">
-                    <ClipboardCheck className="size-5 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <p className="text-sm font-semibold">
-                        {audit.template_name ?? "Audit"} — {audit.store_name ?? "Unknown Store"}
-                      </p>
-                      <Badge
-                        variant="status"
-                        style={
-                          isCompleted
-                            ? { backgroundColor: "#dcfce7", color: "#166534", borderColor: "#4ade80" }
-                            : { backgroundColor: "#fef3c7", color: "#92400e", borderColor: "#fbbf24" }
-                        }
-                      >
-                        {isCompleted ? "Completed" : "In Progress"}
-                      </Badge>
+                <div className="flex items-center min-w-0">
+                  <Link
+                    href={`/audits/${audit.id}`}
+                    className="flex flex-1 items-center gap-3 px-4 py-4 min-w-0"
+                  >
+                    <div className="hidden sm:flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-light">
+                      <ClipboardCheck className="size-5 text-primary" />
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                      {formatDate(audit.created_at)}
-                      {audit.conducted_by_name ? ` · by ${audit.conducted_by_name}` : ""}
-                    </p>
-                    {isCompleted && audit.score !== null && (
-                      <span
-                        className={`inline-block text-xs sm:text-sm font-medium px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border mt-1 ${getScoreColor(audit.score)}`}
-                      >
-                        {audit.score}% — {getScoreLabel(audit.score)}
-                      </span>
-                    )}
-                  </div>
-                </Link>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <p className="text-sm font-semibold">
+                          {audit.template_name ?? "Audit"} — {audit.store_name ?? "Unknown Store"}
+                        </p>
+                        <Badge
+                          variant="status"
+                          style={
+                            isCompleted
+                              ? { backgroundColor: "#dcfce7", color: "#166534", borderColor: "#4ade80" }
+                              : { backgroundColor: "#fef3c7", color: "#92400e", borderColor: "#fbbf24" }
+                          }
+                        >
+                          {isCompleted ? "Completed" : "In Progress"}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                        {formatDate(audit.created_at)}
+                        {audit.conducted_by_name ? ` · by ${audit.conducted_by_name}` : ""}
+                      </p>
+                      {isCompleted && audit.score !== null && (
+                        <span
+                          className={`inline-block text-xs sm:text-sm font-medium px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border mt-1 ${getScoreColor(audit.score)}`}
+                        >
+                          {audit.score}% — {getScoreLabel(audit.score)}
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                  {isAdmin && (
+                    <div className="pr-3 shrink-0">
+                      <DeleteAuditButton
+                        auditId={audit.id}
+                        auditLabel={`${audit.template_name ?? "Audit"} — ${audit.store_name ?? "Unknown Store"}`}
+                      />
+                    </div>
+                  )}
+                </div>
               </Card>
             );
           })}
