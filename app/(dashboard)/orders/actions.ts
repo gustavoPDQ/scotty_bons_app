@@ -135,6 +135,7 @@ export async function createOrder(
           quantity: i.quantity,
           unit_price: i.unit_price,
         })),
+        profileData.store_id,
       );
     }
   } catch (e) {
@@ -273,6 +274,7 @@ export async function adminCreateOrder(
         quantity: i.quantity,
         unit_price: i.unit_price,
       })),
+      parsed.data.store_id,
     );
   } catch (e) {
     console.error("[email] Failed to notify order submitted:", e);

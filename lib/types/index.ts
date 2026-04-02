@@ -28,6 +28,7 @@ export type CategoryRow = {
   id: string;
   name: string;
   product_count: number;
+  sort_order: number;
 };
 
 export type ProductModifierRow = {
@@ -44,6 +45,7 @@ export type ProductRow = {
   category_id: string;
   category_name?: string;
   image_url?: string | null;
+  sort_order: number;
   modifiers: ProductModifierRow[];
 };
 

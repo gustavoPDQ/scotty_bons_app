@@ -7,7 +7,6 @@ import { TERMINAL_STATUSES } from "@/lib/constants/order-status";
 import type { ActionResult, OrderStatus } from "@/lib/types";
 import {
   notifyOrderApproved,
-  notifyOrderDeclined,
   notifyOrderFulfilled,
 } from "@/lib/email/order-notifications";
 
@@ -99,9 +98,8 @@ export async function updateOrderStatus(
           quantity: i.quantity,
           unit_price: Number(i.unit_price),
         })),
+        order.store_id,
       );
-    } else if (newStatus === "declined") {
-      await notifyOrderDeclined(orderId, order.order_number, order.submitted_by, declineReason ?? null);
     }
   } catch (e) {
     console.error("[email] Failed to notify order status change:", e);

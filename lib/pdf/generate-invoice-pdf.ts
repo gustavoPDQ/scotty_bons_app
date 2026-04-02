@@ -139,8 +139,15 @@ export function generateInvoicePdf(
     headStyles: { fillColor: [24, 24, 27] },
     columnStyles: {
       2: { halign: "right" },
-      3: { halign: "right" },
+      3: { halign: "center" },
       4: { halign: "right" },
+    },
+    didParseCell: (data) => {
+      if (data.section === "head") {
+        if (data.column.index === 2) data.cell.styles.halign = "right";
+        if (data.column.index === 3) data.cell.styles.halign = "center";
+        if (data.column.index === 4) data.cell.styles.halign = "right";
+      }
     },
   });
 
@@ -169,9 +176,10 @@ export function generateInvoicePdf(
     if (isLast) {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
-      ty += 2;
+      ty += 3;
       doc.setDrawColor(200);
-      doc.line(labelX - 5, ty - 4, valueX, ty - 4);
+      doc.setLineWidth(0.2);
+      doc.line(labelX + 2, ty - 5, valueX, ty - 5);
     }
     doc.text(label, labelX, ty, { align: "right" });
     doc.text(value, valueX, ty, { align: "right" });

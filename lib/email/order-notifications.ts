@@ -3,6 +3,7 @@ import { notificationEmail } from "./templates";
 import { escapeHtml } from "./escape-html";
 import { createClient } from "@/lib/supabase/server";
 import { generateOrderPdfBuffer } from "@/lib/pdf/generate-pdf-buffer";
+import type { OrderPdfBufferData, OrderPdfBufferItem } from "@/lib/pdf/generate-pdf-buffer";
 
 const appUrl = () => process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -26,12 +27,74 @@ async function getUserEmail(userId: string): Promise<string | null> {
   }
 }
 
+async function buildOrderPdfData(
+  orderNumber: string,
+  status: string,
+  storeId: string,
+  storeName: string,
+  orderItems: { product_name: string; modifier: string; quantity: number; unit_price: number }[],
+): Promise<{ pdfData: OrderPdfBufferData; pdfItems: OrderPdfBufferItem[] } | null> {
+  try {
+    const supabase = await createClient();
+
+    const [{ data: financialSettings }, { data: storeBilling }] = await Promise.all([
+      supabase.from("financial_settings").select("key, value")
+        .in("key", ["hst_rate", "ad_royalties_fee", "commissary_name", "commissary_address", "commissary_postal_code", "commissary_phone"]),
+      supabase.from("stores").select("business_name, address, postal_code, phone, email").eq("id", storeId).single(),
+    ]);
+
+    const fsMap: Record<string, string> = {};
+    for (const row of financialSettings ?? []) fsMap[row.key] = row.value;
+
+    const hstRate = Number(fsMap.hst_rate ?? "13") / 100;
+    const adRoyaltiesFee = Number(fsMap.ad_royalties_fee ?? "0");
+    const subtotal = orderItems.reduce((sum, i) => sum + Number(i.unit_price) * i.quantity, 0);
+    const taxAmount = subtotal * hstRate;
+    const grandTotal = subtotal + taxAmount + adRoyaltiesFee;
+
+    const companyAddress = [fsMap.commissary_address, fsMap.commissary_postal_code].filter(Boolean).join("\n") || null;
+
+    const pdfData: OrderPdfBufferData = {
+      order_number: orderNumber,
+      created_at: new Date().toISOString(),
+      company_name: fsMap.commissary_name ?? null,
+      company_address: companyAddress,
+      company_tax_id: fsMap.commissary_phone ?? null,
+      store_name: storeName,
+      store_business_name: storeBilling?.business_name ?? null,
+      store_address: storeBilling?.address ?? null,
+      store_postal_code: storeBilling?.postal_code ?? null,
+      store_phone: storeBilling?.phone ?? null,
+      store_email: storeBilling?.email ?? null,
+      subtotal,
+      tax_rate: hstRate,
+      tax_amount: taxAmount,
+      ad_royalties_fee: adRoyaltiesFee,
+      grand_total: grandTotal,
+    };
+
+    const pdfItems: OrderPdfBufferItem[] = orderItems.map((i) => ({
+      product_name: i.product_name,
+      modifier: i.modifier,
+      unit_price: Number(i.unit_price),
+      quantity: i.quantity,
+      line_total: Number(i.unit_price) * i.quantity,
+    }));
+
+    return { pdfData, pdfItems };
+  } catch (e) {
+    console.error("[email] Failed to build order PDF data:", e);
+    return null;
+  }
+}
+
 export async function notifyOrderSubmitted(
   orderId: string,
   orderNumber: string,
   storeName: string,
   itemCount: number,
   orderItems?: { product_name: string; modifier: string; quantity: number; unit_price: number }[],
+  storeId?: string,
 ): Promise<void> {
   console.log("[email] notifyOrderSubmitted called:", { orderId, orderNumber, storeName, itemCount });
   const adminEmails = await getEmailsByRole("admin");
@@ -53,16 +116,15 @@ export async function notifyOrderSubmitted(
   });
 
   const attachments: EmailAttachment[] = [];
-  if (orderItems && orderItems.length > 0) {
-    try {
-      const pdfBuffer = generateOrderPdfBuffer(
-        { order_number: orderNumber, status: "submitted", created_at: new Date().toISOString() },
-        orderItems,
-        storeName,
-      );
-      attachments.push({ content: pdfBuffer, filename: `${orderNumber}.pdf` });
-    } catch (e) {
-      console.error("[email] Failed to generate order PDF attachment:", e);
+  if (orderItems && orderItems.length > 0 && storeId) {
+    const result = await buildOrderPdfData(orderNumber, "submitted", storeId, storeName, orderItems);
+    if (result) {
+      try {
+        const pdfBuffer = generateOrderPdfBuffer(result.pdfData, result.pdfItems);
+        attachments.push({ content: pdfBuffer, filename: `${orderNumber}.pdf` });
+      } catch (e) {
+        console.error("[email] Failed to generate order PDF attachment:", e);
+      }
     }
   }
 
@@ -81,44 +143,25 @@ export async function notifyOrderApproved(
   submittedByUserId: string,
   itemCount: number,
   orderItems?: { product_name: string; modifier: string; quantity: number; unit_price: number }[],
+  storeId?: string,
 ): Promise<void> {
-  const [submitterEmail, commissaryEmails] = await Promise.all([
-    getUserEmail(submittedByUserId),
-    getEmailsByRole("commissary"),
-  ]);
+  const commissaryEmails = await getEmailsByRole("commissary");
 
   const safeNum = escapeHtml(orderNumber);
   const safeName = escapeHtml(storeName);
 
-  // Notify submitter (NO PDF attachment for store)
-  if (submitterEmail) {
-    const html = notificationEmail({
-      title: "Order Approved",
-      body: `Your order <strong>${safeNum}</strong> has been approved and is being prepared.`,
-      ctaText: "View Order",
-      ctaUrl: `${appUrl()}/orders/${encodeURIComponent(orderId)}`,
-    });
-
-    await sendEmail({
-      to: submitterEmail,
-      subject: `Order Approved — ${orderNumber}`,
-      html,
-    });
-  }
-
   // Notify commissary (WITH PDF attachment)
   if (commissaryEmails.length > 0) {
     const attachments: EmailAttachment[] = [];
-    if (orderItems && orderItems.length > 0) {
-      try {
-        const pdfBuffer = generateOrderPdfBuffer(
-          { order_number: orderNumber, status: "approved", created_at: new Date().toISOString() },
-          orderItems,
-          storeName,
-        );
-        attachments.push({ content: pdfBuffer, filename: `${orderNumber}.pdf` });
-      } catch (e) {
-        console.error("[email] Failed to generate order PDF attachment:", e);
+    if (orderItems && orderItems.length > 0 && storeId) {
+      const result = await buildOrderPdfData(orderNumber, "approved", storeId, storeName, orderItems);
+      if (result) {
+        try {
+          const pdfBuffer = generateOrderPdfBuffer(result.pdfData, result.pdfItems);
+          attachments.push({ content: pdfBuffer, filename: `${orderNumber}.pdf` });
+        } catch (e) {
+          console.error("[email] Failed to generate order PDF attachment:", e);
+        }
       }
     }
 
@@ -140,34 +183,6 @@ export async function notifyOrderApproved(
       attachments: attachments.length > 0 ? attachments : undefined,
     });
   }
-}
-
-export async function notifyOrderDeclined(
-  orderId: string,
-  orderNumber: string,
-  submittedByUserId: string,
-  declineReason: string | null,
-): Promise<void> {
-  const submitterEmail = await getUserEmail(submittedByUserId);
-  if (!submitterEmail) return;
-
-  const safeNum = escapeHtml(orderNumber);
-  const reasonText = declineReason
-    ? `<br><br><strong>Reason:</strong> ${escapeHtml(declineReason)}`
-    : "";
-
-  const html = notificationEmail({
-    title: "Order Declined",
-    body: `Your order <strong>${safeNum}</strong> has been declined.${reasonText}`,
-    ctaText: "View Order",
-    ctaUrl: `${appUrl()}/orders/${encodeURIComponent(orderId)}`,
-  });
-
-  await sendEmail({
-    to: submitterEmail,
-    subject: `Order Declined — ${orderNumber}`,
-    html,
-  });
 }
 
 export async function notifyOrderFulfilled(

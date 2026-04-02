@@ -44,10 +44,19 @@ export async function createCategory(
   const supabase = await verifyAdmin();
   if (!supabase) return { data: null, error: "Unauthorized." };
 
+  // Assign sort_order to end of list
+  const { data: maxRow } = await supabase
+    .from("product_categories")
+    .select("sort_order")
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .single();
+  const nextSortOrder = (maxRow?.sort_order ?? -1) + 1;
+
   const { data, error } = await supabase
     .from("product_categories")
-    .insert({ name: parsed.data.name })
-    .select("id, name")
+    .insert({ name: parsed.data.name, sort_order: nextSortOrder })
+    .select("id, name, sort_order")
     .single();
 
   if (error) {
@@ -57,7 +66,7 @@ export async function createCategory(
     return { data: null, error: "Failed to create category. Please try again." };
   }
 
-  return { data: { ...(data as { id: string; name: string }), product_count: 0 }, error: null };
+  return { data: { ...(data as { id: string; name: string; sort_order: number }), product_count: 0 }, error: null };
 }
 
 export async function updateCategory(
@@ -148,12 +157,24 @@ export async function createProduct(
   const supabase = await verifyAdmin();
   if (!supabase) return { data: null, error: "Unauthorized." };
 
-  // Insert product (no price/modifier columns)
+  // Assign sort_order to end of category
+  const { data: maxProd } = await supabase
+    .from("products")
+    .select("sort_order")
+    .eq("category_id", parsed.data.category_id)
+    .eq("active", true)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .single();
+  const nextProductSort = (maxProd?.sort_order ?? -1) + 1;
+
+  // Insert product
   const { data, error } = await supabase
     .from("products")
     .insert({
       name: parsed.data.name,
       category_id: parsed.data.category_id,
+      sort_order: nextProductSort,
     })
     .select("id")
     .single();
@@ -363,5 +384,64 @@ export async function removeProductImage(
     .eq("id", productId);
 
   if (error) return { data: null, error: "Failed to remove image." };
+  return { data: null, error: null };
+}
+
+// ── Reorder actions ────────────────────────────────────────────────────────
+
+const reorderSchema = z.array(z.string().uuid()).min(1);
+
+export async function reorderCategories(
+  orderedIds: string[]
+): Promise<ActionResult<null>> {
+  const parsed = reorderSchema.safeParse(orderedIds);
+  if (!parsed.success) return { data: null, error: "Invalid input." };
+
+  const supabase = await verifyAdmin();
+  if (!supabase) return { data: null, error: "Unauthorized." };
+
+  const updates = parsed.data.map((id, index) =>
+    supabase
+      .from("product_categories")
+      .update({ sort_order: index })
+      .eq("id", id)
+  );
+
+  const results = await Promise.all(updates);
+  const failed = results.find((r) => r.error);
+  if (failed?.error) {
+    return { data: null, error: "Failed to reorder categories. Please try again." };
+  }
+
+  return { data: null, error: null };
+}
+
+export async function reorderProducts(
+  categoryId: string,
+  orderedIds: string[]
+): Promise<ActionResult<null>> {
+  const idParsed = idSchema.safeParse(categoryId);
+  if (!idParsed.success) return { data: null, error: "Invalid category ID." };
+
+  const parsed = reorderSchema.safeParse(orderedIds);
+  if (!parsed.success) return { data: null, error: "Invalid input." };
+
+  const supabase = await verifyAdmin();
+  if (!supabase) return { data: null, error: "Unauthorized." };
+
+  const updates = parsed.data.map((id, index) =>
+    supabase
+      .from("products")
+      .update({ sort_order: index })
+      .eq("id", id)
+      .eq("category_id", categoryId)
+  );
+
+  const results = await Promise.all(updates);
+  const failed = results.find((r) => r.error);
+  if (failed?.error) {
+    return { data: null, error: "Failed to reorder products. Please try again." };
+  }
+
   return { data: null, error: null };
 }

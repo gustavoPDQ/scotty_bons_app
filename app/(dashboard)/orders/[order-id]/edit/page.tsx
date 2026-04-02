@@ -63,19 +63,20 @@ export default async function EditOrderPage({
   const [categoriesResult, productsResult] = await Promise.all([
     supabase
       .from("product_categories")
-      .select("id, name")
-      .order("name"),
+      .select("id, name, sort_order")
+      .order("sort_order"),
     supabase
       .from("products")
-      .select("id, name, category_id, image_url, product_modifiers(id, label, price, sort_order)")
+      .select("id, name, category_id, image_url, sort_order, product_modifiers(id, label, price, sort_order)")
       .eq("active", true)
-      .order("name"),
+      .order("sort_order"),
   ]);
 
   const categories: CategoryRow[] = (categoriesResult.data ?? []).map((c) => ({
     id: c.id,
     name: c.name,
     product_count: 0,
+    sort_order: c.sort_order,
   }));
 
   const products: ProductRow[] = (productsResult.data ?? []).map((p) => ({
@@ -83,6 +84,7 @@ export default async function EditOrderPage({
     name: p.name,
     category_id: p.category_id,
     image_url: p.image_url,
+    sort_order: p.sort_order,
     modifiers: ((p.product_modifiers ?? []) as ProductModifierRow[])
       .map((m) => ({
         id: m.id,

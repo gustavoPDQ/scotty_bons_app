@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
+  ArrowDown,
+  ArrowUp,
   ChevronDown,
   ChevronRight,
   FolderOpen,
@@ -51,6 +53,8 @@ import { ProductForm } from "@/components/products/product-form";
 import {
   deleteCategory,
   deleteProduct,
+  reorderCategories,
+  reorderProducts,
 } from "@/app/(dashboard)/products/actions";
 import { formatPrice } from "@/lib/utils";
 import type { CategoryRow, ProductRow } from "@/lib/types";
@@ -73,6 +77,7 @@ export function CatalogAdmin({ products, categories }: CatalogAdminProps) {
   const [deletingCategory, setDeletingCategory] = useState<CategoryRow | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<ProductRow | null>(null);
   const [isDeleting, startDeleteTransition] = useTransition();
+  const [isReordering, startReorderTransition] = useTransition();
 
   const refresh = () => router.refresh();
 
@@ -129,6 +134,31 @@ export function CatalogAdmin({ products, categories }: CatalogAdminProps) {
   const openCreateProduct = (categoryId: string) => {
     setCreateProductCategoryId(categoryId);
     setIsCreateProductOpen(true);
+  };
+
+  const handleMoveCategory = (index: number, direction: "up" | "down") => {
+    const swapIndex = direction === "up" ? index - 1 : index + 1;
+    if (swapIndex < 0 || swapIndex >= categories.length) return;
+    const newOrder = [...categories];
+    [newOrder[index], newOrder[swapIndex]] = [newOrder[swapIndex], newOrder[index]];
+    startReorderTransition(async () => {
+      const result = await reorderCategories(newOrder.map((c) => c.id));
+      if (result.error) toast.error(result.error);
+      refresh();
+    });
+  };
+
+  const handleMoveProduct = (categoryId: string, index: number, direction: "up" | "down") => {
+    const catProducts = productsByCategory[categoryId] ?? [];
+    const swapIndex = direction === "up" ? index - 1 : index + 1;
+    if (swapIndex < 0 || swapIndex >= catProducts.length) return;
+    const newOrder = [...catProducts];
+    [newOrder[index], newOrder[swapIndex]] = [newOrder[swapIndex], newOrder[index]];
+    startReorderTransition(async () => {
+      const result = await reorderProducts(categoryId, newOrder.map((p) => p.id));
+      if (result.error) toast.error(result.error);
+      refresh();
+    });
   };
 
   const totalProducts = products.length;
@@ -207,7 +237,7 @@ export function CatalogAdmin({ products, categories }: CatalogAdminProps) {
             </div>
           ) : (
             <div className="rounded-md border divide-y">
-              {categories.map((category) => {
+              {categories.map((category, catIndex) => {
                 const isOpen = expanded.has(category.id);
                 const catProducts = productsByCategory[category.id] ?? [];
                 return (
@@ -239,6 +269,26 @@ export function CatalogAdmin({ products, categories }: CatalogAdminProps) {
                         </div>
                       </button>
                       <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-7"
+                          title="Move up"
+                          disabled={catIndex === 0 || isReordering}
+                          onClick={() => handleMoveCategory(catIndex, "up")}
+                        >
+                          <ArrowUp className="size-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-7"
+                          title="Move down"
+                          disabled={catIndex === categories.length - 1 || isReordering}
+                          onClick={() => handleMoveCategory(catIndex, "down")}
+                        >
+                          <ArrowDown className="size-3.5" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -281,7 +331,7 @@ export function CatalogAdmin({ products, categories }: CatalogAdminProps) {
                           </div>
                         ) : (
                           <div className="divide-y divide-border/50">
-                            {catProducts.map((product) => (
+                            {catProducts.map((product, prodIndex) => (
                               <div
                                 key={product.id}
                                 className="flex items-center justify-between pl-14 pr-4 py-2.5"
@@ -311,6 +361,27 @@ export function CatalogAdmin({ products, categories }: CatalogAdminProps) {
                                     </p>
                                   </div>
                                 </div>
+                                <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-7"
+                                  title="Move up"
+                                  disabled={prodIndex === 0 || isReordering}
+                                  onClick={() => handleMoveProduct(category.id, prodIndex, "up")}
+                                >
+                                  <ArrowUp className="size-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-7"
+                                  title="Move down"
+                                  disabled={prodIndex === catProducts.length - 1 || isReordering}
+                                  onClick={() => handleMoveProduct(category.id, prodIndex, "down")}
+                                >
+                                  <ArrowDown className="size-3.5" />
+                                </Button>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="icon" className="size-8">
@@ -332,6 +403,7 @@ export function CatalogAdmin({ products, categories }: CatalogAdminProps) {
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
+                                </div>
                               </div>
                             ))}
                           </div>

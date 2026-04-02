@@ -24,14 +24,14 @@ export default async function ProductsPage() {
 
   const { data: categoriesRaw, error: categoriesError } = await supabase
     .from("product_categories")
-    .select("id, name")
-    .order("name");
+    .select("id, name, sort_order")
+    .order("sort_order");
 
   const { data: productsRaw, error: productsError } = await supabase
     .from("products")
-    .select("id, name, category_id, image_url, product_modifiers(id, label, price, sort_order)")
+    .select("id, name, category_id, image_url, sort_order, product_modifiers(id, label, price, sort_order)")
     .eq("active", true)
-    .order("name");
+    .order("sort_order");
 
   const queryError = categoriesError || productsError;
 
@@ -40,6 +40,7 @@ export default async function ProductsPage() {
     name: p.name,
     category_id: p.category_id,
     image_url: p.image_url,
+    sort_order: p.sort_order,
     modifiers: ((p.product_modifiers ?? []) as ProductModifierRow[])
       .map((m) => ({
         id: m.id,
@@ -61,6 +62,7 @@ export default async function ProductsPage() {
     id: c.id,
     name: c.name,
     product_count: countMap.get(c.id) ?? 0,
+    sort_order: c.sort_order,
   }));
 
   // Enrich products with category names
