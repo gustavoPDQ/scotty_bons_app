@@ -6,6 +6,7 @@ export interface OrderPdfData {
   order_number: string;
   status: string;
   created_at: string;
+  submitted_by_name: string | null;
   company_name: string | null;
   company_address: string | null;
   company_tax_id: string | null;
@@ -56,6 +57,13 @@ export function generateOrderPdf(
   doc.text(dateFmt.format(new Date(order.created_at)), rightX, 23, {
     align: "right",
   });
+  if (order.submitted_by_name) {
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text(`Ordered by: ${order.submitted_by_name}`, rightX, 28, {
+      align: "right",
+    });
+  }
 
   // ── Status badge ──
   const statusColors: Record<string, { bg: [number, number, number]; text: [number, number, number] }> = {
@@ -78,15 +86,15 @@ export function generateOrderPdf(
   const badgeW = doc.getTextWidth(sLabel) + 8;
   const badgeH = 6;
   const badgeX = rightX - badgeW;
-  const badgeY = 26;
+  const badgeY = order.submitted_by_name ? 32 : 26;
   doc.setFillColor(...sColor.bg);
   doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 1.5, 1.5, "F");
   doc.setTextColor(...sColor.text);
   doc.text(sLabel, badgeX + badgeW / 2, badgeY + 4.2, { align: "center" });
 
   // ── From (left) / Ship To (right) — side by side ──
-  let leftY = 38;
-  let rightY = 38;
+  let leftY = badgeY + badgeH + 4;
+  let rightY = leftY;
 
   // From
   doc.setFont("helvetica", "bold");

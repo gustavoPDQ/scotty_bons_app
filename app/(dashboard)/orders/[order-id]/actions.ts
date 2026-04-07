@@ -125,7 +125,7 @@ export async function deleteOrder(
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, store_id")
     .eq("user_id", user.id)
     .single();
 
@@ -135,24 +135,27 @@ export async function deleteOrder(
 
   const role = profile.role;
 
+  // Use admin client for all roles to bypass RLS issues with soft-delete
+  // (setting deleted_at makes the row invisible to RLS SELECT policies).
+  // Ownership and status checks are enforced explicitly in the query filters.
+  const adminClient = createAdminClient();
+
   if (role === "store") {
     // Store users can only delete their own submitted orders
-    // RLS ensures they can only see their own orders
-    // Note: we don't use .select().single() because setting deleted_at makes
-    // the row invisible to RLS SELECT policies, causing a false "not found" error.
-    const { error, count } = await supabase
+    const { error, count } = await adminClient
       .from("orders")
-      .update({ deleted_at: new Date().toISOString() })
+      .update({ deleted_at: new Date().toISOString() }, { count: "exact" })
       .eq("id", orderId)
-      .eq("status", "submitted");
+      .eq("status", "submitted")
+      .eq("store_id", profile.store_id)
+      .is("deleted_at", null);
 
     if (error || count === 0) {
       return { data: null, error: "Order not found or cannot be deleted." };
     }
   } else if (role === "admin") {
     // Admin can delete any order regardless of status
-    // If the order has an invoice, delete it first (uses service role to bypass RLS)
-    const adminClient = createAdminClient();
+    // If the order has an invoice, delete it first
     const { data: invoice } = await adminClient
       .from("invoices")
       .select("id")
@@ -171,10 +174,9 @@ export async function deleteOrder(
       }
     }
 
-    // Use admin client to bypass RLS for soft-deleting fulfilled orders
     const { error, count } = await adminClient
       .from("orders")
-      .update({ deleted_at: new Date().toISOString() })
+      .update({ deleted_at: new Date().toISOString() }, { count: "exact" })
       .eq("id", orderId)
       .is("deleted_at", null);
 
@@ -185,11 +187,12 @@ export async function deleteOrder(
     revalidatePath("/invoices");
   } else if (role === "commissary") {
     // Commissary can delete any non-fulfilled order
-    const { error, count } = await supabase
+    const { error, count } = await adminClient
       .from("orders")
-      .update({ deleted_at: new Date().toISOString() })
+      .update({ deleted_at: new Date().toISOString() }, { count: "exact" })
       .eq("id", orderId)
-      .neq("status", "fulfilled");
+      .neq("status", "fulfilled")
+      .is("deleted_at", null);
 
     if (error || count === 0) {
       return { data: null, error: "Order not found or cannot be deleted." };

@@ -317,7 +317,7 @@ export function NewOrderCart({ categories, products, storeId, stores }: NewOrder
                             });
                           }
                         }}
-                        className="w-14 text-center h-8"
+                        className="w-14 text-center h-8 px-1 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
                       />
                       <Button
                         variant="outline"

@@ -1,23 +1,17 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getUser, getProfile } from "@/lib/supabase/auth-cache";
 import { NewOrderCart } from "@/components/orders/new-order-cart";
 import type { CategoryRow, ProductRow, ProductModifierRow } from "@/lib/types";
 
 export default async function NewOrderPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const user = await getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, store_id")
-    .eq("user_id", user.id)
-    .single();
-
+  const profile = await getProfile();
   if (!profile) redirect("/orders");
+
+  const supabase = await createClient();
 
   const isAdmin = profile.role === "admin";
   const isStore = profile.role === "store" && !!profile.store_id;

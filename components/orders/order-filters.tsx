@@ -39,6 +39,8 @@ export function OrderFilters({ role, stores }: OrderFiltersProps) {
   const currentStoreId = searchParams.get("store_id") ?? "";
 
   const [searchText, setSearchText] = useState(currentQ);
+  const [fromDate, setFromDate] = useState(currentFrom);
+  const [toDate, setToDate] = useState(currentTo);
 
   const hasFilters = !!(
     currentStatus ||
@@ -65,6 +67,8 @@ export function OrderFilters({ role, stores }: OrderFiltersProps) {
 
   function clearAll() {
     setSearchText("");
+    setFromDate("");
+    setToDate("");
     startTransition(() => {
       router.push("/orders");
     });
@@ -108,8 +112,9 @@ export function OrderFilters({ role, stores }: OrderFiltersProps) {
         </label>
         <input
           type="date"
-          value={currentFrom}
-          onChange={(e) => updateParams({ from: e.target.value })}
+          value={fromDate}
+          onChange={(e) => setFromDate(e.target.value)}
+          onBlur={() => { if (fromDate !== currentFrom) updateParams({ from: fromDate }); }}
           className="flex h-10 w-full rounded-xl border border-input bg-muted/50 px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary"
         />
       </div>
@@ -120,8 +125,9 @@ export function OrderFilters({ role, stores }: OrderFiltersProps) {
         </label>
         <input
           type="date"
-          value={currentTo}
-          onChange={(e) => updateParams({ to: e.target.value })}
+          value={toDate}
+          onChange={(e) => setToDate(e.target.value)}
+          onBlur={() => { if (toDate !== currentTo) updateParams({ to: toDate }); }}
           className="flex h-10 w-full rounded-xl border border-input bg-muted/50 px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary"
         />
       </div>

@@ -6,6 +6,7 @@ import { DeleteAuditButton } from "@/components/audits/delete-audit-button";
 import { ExportAuditPdfButton } from "@/components/audits/export-audit-pdf-button";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getUser, getProfile } from "@/lib/supabase/auth-cache";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,19 +29,14 @@ export default async function AuditDetailPage({
   params: Promise<{ "audit-id": string }>;
 }) {
   const { "audit-id": auditId } = await params;
-  const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, store_id")
-    .eq("user_id", user.id)
-    .single();
+  const profile = await getProfile();
   if (!profile) redirect("/login");
+
+  const supabase = await createClient();
 
   const role = profile.role;
   const isAdmin = role === "admin";

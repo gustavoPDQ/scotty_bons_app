@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { getUser, getProfile } from "@/lib/supabase/auth-cache";
 import { EditOrderCart } from "@/components/orders/edit-order-cart";
 import type { CategoryRow, ProductRow, ProductModifierRow, OrderStatus } from "@/lib/types";
 
@@ -11,20 +12,14 @@ export default async function EditOrderPage({
   params: Promise<{ "order-id": string }>;
 }) {
   const { "order-id": orderId } = await params;
-  const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, store_id")
-    .eq("user_id", user.id)
-    .single();
-
+  const profile = await getProfile();
   if (!profile) redirect("/login");
+
+  const supabase = await createClient();
 
   // Fetch order
   const { data: order } = await supabase

@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { ClipboardCheck, Settings2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getUser, getProfile } from "@/lib/supabase/auth-cache";
+import { createPageTimer } from "@/lib/perf";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,21 +29,16 @@ export default async function AuditsPage({
     to?: string;
   }>;
 }) {
+  const timer = createPageTimer("Audits");
   const params = await searchParams;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
+  const user = await timer.time("auth.getUser(cached)", () => getUser());
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, store_id")
-    .eq("user_id", user.id)
-    .single();
-
+  const profile = await timer.time("profiles.select(cached)", () => getProfile());
   if (!profile) redirect("/login");
+
+  const supabase = await createClient();
 
   const role = profile.role as "admin" | "commissary" | "store";
   const isAdmin = role === "admin";
@@ -83,16 +80,18 @@ export default async function AuditsPage({
     query = query.lte("created_at", toFilter + "T23:59:59.999Z");
   }
 
-  const { data: auditsRaw } = await query;
+  const { data: auditsRaw } = await timer.time("audits.select", () => query);
   const audits: AuditRow[] = [];
 
   if (auditsRaw && auditsRaw.length > 0) {
     // Fetch store names
     const storeIds = [...new Set(auditsRaw.map((a) => a.store_id))];
-    const { data: stores } = await supabase
-      .from("stores")
-      .select("id, name")
-      .in("id", storeIds);
+    const { data: stores } = await timer.time("stores.byAudits", () =>
+      supabase
+        .from("stores")
+        .select("id, name")
+        .in("id", storeIds)
+    );
     const storeNames: Record<string, string> = {};
     for (const s of stores ?? []) {
       storeNames[s.id] = s.name;
@@ -100,10 +99,12 @@ export default async function AuditsPage({
 
     // Fetch template names
     const templateIds = [...new Set(auditsRaw.map((a) => a.template_id))];
-    const { data: templates } = await supabase
-      .from("audit_templates")
-      .select("id, name")
-      .in("id", templateIds);
+    const { data: templates } = await timer.time("templates.byAudits", () =>
+      supabase
+        .from("audit_templates")
+        .select("id, name")
+        .in("id", templateIds)
+    );
     const templateNames: Record<string, string> = {};
     for (const t of templates ?? []) {
       templateNames[t.id] = t.name;
@@ -112,8 +113,12 @@ export default async function AuditsPage({
     // Fetch conductor names from auth.users via admin API
     const conductorIds = [...new Set(auditsRaw.map((a) => a.conducted_by))];
     const adminClient = createAdminClient();
-    const conductorResults = await Promise.all(
-      conductorIds.map((id) => adminClient.auth.admin.getUserById(id)),
+    const conductorResults = await timer.time(
+      `admin.getUserById x${conductorIds.length}`,
+      () =>
+        Promise.all(
+          conductorIds.map((id) => adminClient.auth.admin.getUserById(id)),
+        )
     );
     const conductorNames: Record<string, string> = {};
     for (const r of conductorResults) {
@@ -136,23 +141,29 @@ export default async function AuditsPage({
   // Fetch stores for filter + new audit dialog
   let allStores: { id: string; name: string }[] = [];
   if (role !== "store") {
-    const { data: storesData } = await supabase
-      .from("stores")
-      .select("id, name")
-      .order("name");
+    const { data: storesData } = await timer.time("stores.allForFilter", () =>
+      supabase
+        .from("stores")
+        .select("id, name")
+        .order("name")
+    );
     allStores = storesData ?? [];
   }
 
   // Fetch active templates for new audit dialog (admin + commissary)
   let activeTemplates: { id: string; name: string }[] = [];
   if (canConduct) {
-    const { data: templatesData } = await supabase
-      .from("audit_templates")
-      .select("id, name")
-      .eq("is_active", true)
-      .order("name");
+    const { data: templatesData } = await timer.time("templates.active", () =>
+      supabase
+        .from("audit_templates")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name")
+    );
     activeTemplates = templatesData ?? [];
   }
+
+  timer.summary();
 
   const formatDate = (timestamp: string) =>
     new Intl.DateTimeFormat("en-CA", {

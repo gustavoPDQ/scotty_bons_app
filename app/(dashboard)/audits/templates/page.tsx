@@ -1,23 +1,17 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getUser, getProfile } from "@/lib/supabase/auth-cache";
 import type { AuditTemplateRow, AuditTemplateCategoryRow, AuditTemplateItemRow } from "@/lib/types";
 import { TemplatesClient } from "@/components/audits/templates-client";
 
 export default async function AuditTemplatesPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const user = await getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-
+  const profile = await getProfile();
   if (!profile || profile.role !== "admin") redirect("/orders");
+
+  const supabase = await createClient();
 
   // Fetch templates
   const { data: templatesRaw } = await supabase

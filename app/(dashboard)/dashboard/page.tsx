@@ -8,6 +8,8 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { getUser, getProfile } from "@/lib/supabase/auth-cache";
+import { createPageTimer } from "@/lib/perf";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatPrice } from "@/lib/utils";
 import { STATUS_LABELS } from "@/lib/constants/order-status";
@@ -153,39 +155,37 @@ export default async function DashboardPage({
     rangeLabel = result.label;
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const timer = createPageTimer("Dashboard");
+  const user = await timer.time("auth.getUser(cached)", () => getUser());
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, store_id")
-    .eq("user_id", user.id)
-    .single();
-
+  const profile = await timer.time("profiles.select(cached)", () => getProfile());
   if (!profile || profile.role !== "admin") redirect("/orders");
+
+  const supabase = await createClient();
 
   // ── Resolve "all" range to earliest data date ──
   let resolvedRangeFrom = rangeFrom;
   if (rangeKey === "all") {
-    const [earliestOrder, earliestAudit] = await Promise.all([
-      supabase
-        .from("orders")
-        .select("created_at")
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .single(),
-      supabase
-        .from("audits")
-        .select("conducted_at")
-        .not("conducted_at", "is", null)
-        .order("conducted_at", { ascending: true })
-        .limit(1)
-        .single(),
-    ]);
+    const [earliestOrder, earliestAudit] = await timer.time(
+      "earliest-dates",
+      () =>
+        Promise.all([
+          supabase
+            .from("orders")
+            .select("created_at")
+            .order("created_at", { ascending: true })
+            .limit(1)
+            .single(),
+          supabase
+            .from("audits")
+            .select("conducted_at")
+            .not("conducted_at", "is", null)
+            .order("conducted_at", { ascending: true })
+            .limit(1)
+            .single(),
+        ])
+    );
 
     const dates = [
       earliestOrder.data?.created_at,
@@ -229,16 +229,18 @@ export default async function DashboardPage({
     completedAuditsResult,
     productsResult,
     categoriesResult,
-  ] = await Promise.all([
-    ordersQuery,
-    supabase
-      .from("order_items")
-      .select("order_id, product_name, modifier, unit_price, quantity"),
-    supabase.from("stores").select("id, name"),
-    auditsQuery,
-    supabase.from("products").select("id, name, category_id, product_modifiers(label)"),
-    supabase.from("product_categories").select("id, name"),
-  ]);
+  ] = await timer.time("main-parallel-queries", () =>
+    Promise.all([
+      ordersQuery,
+      supabase
+        .from("order_items")
+        .select("order_id, product_name, modifier, unit_price, quantity"),
+      supabase.from("stores").select("id, name"),
+      auditsQuery,
+      supabase.from("products").select("id, name, category_id, product_modifiers(label)"),
+      supabase.from("product_categories").select("id, name"),
+    ])
+  );
 
   const orders = ordersResult.data ?? [];
   const allRawItems = itemsResult.data ?? [];
@@ -457,6 +459,8 @@ export default async function DashboardPage({
     store_name: storeNameMap[orderStoreMap[item.order_id]] ?? "Unknown",
   }));
 
+  timer.summary();
+
   // ── Formatting helpers ──
   const dateFmt = new Intl.DateTimeFormat("en-CA", { dateStyle: "medium" });
 
@@ -489,6 +493,16 @@ export default async function DashboardPage({
           const config = STATUS_CARD_CONFIG[status];
           const Icon = config.icon;
           const count = statusCounts[status];
+          const viewOrdersParams = new URLSearchParams({ status });
+          if (rangeKey !== "all") {
+            const fromStr = rangeFrom.toISOString().slice(0, 10);
+            const toStr = (rangeTo ?? new Date()).toISOString().slice(0, 10);
+            viewOrdersParams.set("from", fromStr);
+            viewOrdersParams.set("to", toStr);
+          }
+          if (storeFilterId !== "all") {
+            viewOrdersParams.set("store_id", storeFilterId);
+          }
           return (
             <Card
               key={status}
@@ -511,7 +525,7 @@ export default async function DashboardPage({
                   {STATUS_LABELS[status]}
                 </p>
                 <Link
-                  href={`/orders?status=${status}`}
+                  href={`/orders?${viewOrdersParams.toString()}`}
                   className="inline-flex items-center gap-1 text-xs text-muted-foreground font-medium mt-2 group-hover:text-primary hover:underline transition-colors"
                 >
                   View orders <ArrowRight className="size-3" />

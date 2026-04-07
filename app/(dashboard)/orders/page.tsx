@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Package, Plus, Search, ShoppingCart } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { getUser, getProfile } from "@/lib/supabase/auth-cache";
+import { createPageTimer } from "@/lib/perf";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { OrderStatus } from "@/lib/types";
@@ -32,21 +34,16 @@ export default async function OrdersPage({
     store_id?: string;
   }>;
 }) {
+  const timer = createPageTimer("Orders");
   const params = await searchParams;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
+  const user = await timer.time("auth.getUser(cached)", () => getUser());
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, store_id")
-    .eq("user_id", user.id)
-    .single();
-
+  const profile = await timer.time("profiles.select(cached)", () => getProfile());
   if (!profile) redirect("/login");
+
+  const supabase = await createClient();
 
   const role = profile.role;
   const isStore = role === "store";
@@ -92,7 +89,7 @@ export default async function OrdersPage({
     query = query.eq("store_id", storeFilter);
   }
 
-  const { data: ordersRaw } = await query;
+  const { data: ordersRaw } = await timer.time("orders.select", () => query);
 
   // Fetch item counts and totals per order
   let orders = ordersRaw ?? [];
@@ -100,10 +97,12 @@ export default async function OrdersPage({
 
   const itemSummaries: Record<string, { count: number; total: number }> = {};
   if (orderIds.length > 0) {
-    const { data: items } = await supabase
-      .from("order_items")
-      .select("order_id, unit_price, quantity")
-      .in("order_id", orderIds);
+    const { data: items } = await timer.time("order_items.select", () =>
+      supabase
+        .from("order_items")
+        .select("order_id, unit_price, quantity")
+        .in("order_id", orderIds)
+    );
 
     if (items) {
       for (const item of items) {
@@ -122,10 +121,12 @@ export default async function OrdersPage({
   const storeNames: Record<string, string> = {};
   if (!isStore && orders.length > 0) {
     const storeIds = [...new Set(orders.map((o) => o.store_id))];
-    const { data: stores } = await supabase
-      .from("stores")
-      .select("id, name")
-      .in("id", storeIds);
+    const { data: stores } = await timer.time("stores.byOrders", () =>
+      supabase
+        .from("stores")
+        .select("id, name")
+        .in("id", storeIds)
+    );
 
     if (stores) {
       for (const store of stores) {
@@ -148,12 +149,16 @@ export default async function OrdersPage({
   // Fetch all stores for the filter dropdown (admin/commissary only)
   let allStores: { id: string; name: string }[] = [];
   if (!isStore) {
-    const { data: storesData } = await supabase
-      .from("stores")
-      .select("id, name")
-      .order("name");
+    const { data: storesData } = await timer.time("stores.allForFilter", () =>
+      supabase
+        .from("stores")
+        .select("id, name")
+        .order("name")
+    );
     allStores = storesData ?? [];
   }
+
+  timer.summary();
 
   // Prepare serializable order data for client component
   const orderData = orders.map((order) => ({

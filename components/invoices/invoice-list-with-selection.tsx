@@ -1,11 +1,21 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import { formatPrice } from "@/lib/utils";
 import { InvoiceSelectableList } from "@/components/invoices/invoice-selection-summary";
 import { FileText, ChevronRight } from "lucide-react";
+
+type SortKey = "newest" | "oldest" | "store_asc" | "store_desc" | "invoice_asc" | "invoice_desc";
 
 interface InvoiceData {
   id: string;
@@ -21,15 +31,52 @@ interface InvoiceListWithSelectionProps {
   invoices: InvoiceData[];
 }
 
+function sortInvoices(invoices: InvoiceData[], key: SortKey): InvoiceData[] {
+  const sorted = [...invoices];
+  switch (key) {
+    case "newest":
+      return sorted.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    case "oldest":
+      return sorted.sort((a, b) => a.created_at.localeCompare(b.created_at));
+    case "store_asc":
+      return sorted.sort((a, b) => a.store_name.localeCompare(b.store_name) || b.created_at.localeCompare(a.created_at));
+    case "store_desc":
+      return sorted.sort((a, b) => b.store_name.localeCompare(a.store_name) || b.created_at.localeCompare(a.created_at));
+    case "invoice_asc":
+      return sorted.sort((a, b) => a.invoice_number.localeCompare(b.invoice_number));
+    case "invoice_desc":
+      return sorted.sort((a, b) => b.invoice_number.localeCompare(a.invoice_number));
+    default:
+      return sorted;
+  }
+}
+
 export function InvoiceListWithSelection({ invoices }: InvoiceListWithSelectionProps) {
-  const invoiceIds = invoices.map((i) => i.id);
+  const [sortKey, setSortKey] = useState<SortKey>("newest");
+  const sorted = useMemo(() => sortInvoices(invoices, sortKey), [invoices, sortKey]);
+  const invoiceIds = sorted.map((i) => i.id);
   const dateFmt = new Intl.DateTimeFormat("en-CA", { dateStyle: "medium" });
 
   return (
     <InvoiceSelectableList invoiceIds={invoiceIds}>
       {({ isSelected, toggleSelection }) => (
         <div className="space-y-3">
-          {invoices.map((invoice) => (
+          <div className="flex items-center justify-end">
+            <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
+              <SelectTrigger className="w-[180px] h-9 rounded-xl text-xs">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                <SelectItem value="newest">Newest first</SelectItem>
+                <SelectItem value="oldest">Oldest first</SelectItem>
+                <SelectItem value="store_asc">Store A → Z</SelectItem>
+                <SelectItem value="store_desc">Store Z → A</SelectItem>
+                <SelectItem value="invoice_asc">Invoice # ↑</SelectItem>
+                <SelectItem value="invoice_desc">Invoice # ↓</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {sorted.map((invoice) => (
             <Card
               key={invoice.id}
               className="overflow-hidden hover:shadow-md transition-shadow"

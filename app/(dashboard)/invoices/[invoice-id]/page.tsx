@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { getUser } from "@/lib/supabase/auth-cache";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatPrice } from "@/lib/utils";
 import { ExportInvoicePdfButton } from "@/components/invoices/export-invoice-pdf-button";
@@ -12,13 +13,11 @@ export default async function InvoiceDetailPage({
   params: Promise<{ "invoice-id": string }>;
 }) {
   const { "invoice-id": invoiceId } = await params;
-  const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const user = await getUser();
   if (!user) redirect("/login");
+
+  const supabase = await createClient();
 
   // Fetch invoice — RLS handles access control
   const { data: invoice } = await supabase

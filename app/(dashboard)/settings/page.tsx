@@ -1,27 +1,19 @@
 import { createClient } from "@/lib/supabase/server";
+import { getUser, getProfile } from "@/lib/supabase/auth-cache";
 import { redirect } from "next/navigation";
 import { ChangePasswordForm } from "@/components/settings/change-password-form";
 import { ChangeEmailForm } from "@/components/settings/change-email-form";
 import { FinancialSettingsForm } from "@/components/settings/financial-settings-form";
 
 export default async function SettingsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
+  if (!user) redirect("/login");
 
-  if (!user) {
-    redirect("/login");
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-
+  const profile = await getProfile();
   const isAdmin = profile?.role === "admin";
   if (!isAdmin) redirect("/orders");
+
+  const supabase = await createClient();
 
   const financialSettings: Record<string, string> = {};
   if (isAdmin) {

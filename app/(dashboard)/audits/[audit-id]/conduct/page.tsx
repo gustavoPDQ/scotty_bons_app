@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { getUser, getProfile } from "@/lib/supabase/auth-cache";
 import type {
   AuditTemplateCategoryRow,
   AuditTemplateItemRow,
@@ -16,20 +17,14 @@ export default async function ConductAuditPage({
   params: Promise<{ "audit-id": string }>;
 }) {
   const { "audit-id": auditId } = await params;
-  const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-
+  const profile = await getProfile();
   if (!profile || (profile.role !== "admin" && profile.role !== "commissary")) redirect("/audits");
+
+  const supabase = await createClient();
 
   // Fetch audit
   const { data: audit } = await supabase

@@ -31,24 +31,30 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  // Do not run code between createServerClient and
-  // supabase.auth.getClaims(). A simple mistake could make it very hard to debug
-  // issues with users being randomly logged out.
+  // Try getClaims() first — reads the JWT locally with NO network roundtrip.
+  // Only fall back to getUser() (network call) if the token looks expired,
+  // since getUser() can refresh the session via the refresh token.
+  const { data: claims, error: claimsError } = await supabase.auth.getClaims();
 
-  // IMPORTANT: If you remove getClaims() and you use server-side rendering
-  // with the Supabase client, your users may be randomly logged out.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let isAuthenticated = !!claims && !claimsError;
+
+  if (!isAuthenticated) {
+    // Token might be expired but refresh token could still be valid.
+    // Fall back to getUser() which will attempt a token refresh.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    isAuthenticated = !!user;
+  }
 
   if (
-    !user &&
+    !isAuthenticated &&
     !request.nextUrl.pathname.startsWith("/login") &&
     !request.nextUrl.pathname.startsWith("/auth") &&
     !request.nextUrl.pathname.startsWith("/forgot-password") &&
     !request.nextUrl.pathname.startsWith("/update-password")
   ) {
-    // no user, potentially respond by redirecting the user to the login page
+    // no valid session, redirect to login
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

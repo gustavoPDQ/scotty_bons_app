@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { FileText } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { getUser, getProfile } from "@/lib/supabase/auth-cache";
 import { Card, CardContent } from "@/components/ui/card";
 import { InvoiceFilters } from "@/components/invoices/invoice-filters";
 import { InvoiceListWithSelection } from "@/components/invoices/invoice-list-with-selection";
@@ -21,21 +22,14 @@ export default async function InvoicesPage({
   }>;
 }) {
   const params = await searchParams;
-  const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const user = await getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, store_id")
-    .eq("user_id", user.id)
-    .single();
-
+  const profile = await getProfile();
   if (!profile) redirect("/login");
+
+  const supabase = await createClient();
 
   const role = profile.role;
   const isStore = role === "store";

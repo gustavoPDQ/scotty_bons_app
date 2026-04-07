@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { ArrowLeft, Clock, AlertCircle, FileText } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getUser, getProfile } from "@/lib/supabase/auth-cache";
+import { createPageTimer } from "@/lib/perf";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,56 +22,90 @@ export default async function OrderDetailPage({
 }: {
   params: Promise<{ "order-id": string }>;
 }) {
+  const timer = createPageTimer("OrderDetail");
   const { "order-id": orderId } = await params;
-  const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const user = await timer.time("auth.getUser(cached)", () => getUser());
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, store_id")
-    .eq("user_id", user.id)
-    .single();
-
+  const profile = await timer.time("profiles.select(cached)", () => getProfile());
   if (!profile) redirect("/login");
 
+  const supabase = await createClient();
+
   // Fetch order — RLS handles store isolation
-  const { data: order } = await supabase
-    .from("orders")
-    .select(
-      "id, order_number, store_id, submitted_by, status, decline_reason, fulfilled_at, created_at, updated_at"
-    )
-    .eq("id", orderId)
-    .single();
+  const { data: order } = await timer.time("order.select", () =>
+    supabase
+      .from("orders")
+      .select(
+        "id, order_number, store_id, submitted_by, status, decline_reason, fulfilled_at, created_at, updated_at"
+      )
+      .eq("id", orderId)
+      .single()
+  );
 
   // RLS denied or not found → redirect
   if (!order) redirect("/orders");
 
-  // Fetch order items
-  const { data: items } = await supabase
-    .from("order_items")
-    .select("id, product_name, modifier, unit_price, quantity")
-    .eq("order_id", orderId)
-    .order("created_at");
+  // Fetch items, history, store, invoice, financial settings, billing in parallel
+  const [itemsRes, historyRes, storeRes, invoiceRes, financialRes, storeBillingRes] =
+    await timer.time("parallel-queries", () =>
+      Promise.all([
+        supabase
+          .from("order_items")
+          .select("id, product_name, modifier, unit_price, quantity")
+          .eq("order_id", orderId)
+          .order("created_at"),
+        supabase
+          .from("order_status_history")
+          .select("id, status, changed_by, changed_at")
+          .eq("order_id", orderId)
+          .order("changed_at", { ascending: true }),
+        supabase
+          .from("stores")
+          .select("name")
+          .eq("id", order.store_id)
+          .single(),
+        supabase
+          .from("invoices")
+          .select("id")
+          .eq("order_id", order.id)
+          .maybeSingle(),
+        supabase
+          .from("financial_settings")
+          .select("key, value")
+          .in("key", ["hst_rate", "ad_royalties_fee", "commissary_name", "commissary_address", "commissary_postal_code", "commissary_phone"]),
+        supabase
+          .from("stores")
+          .select("business_name, address, postal_code, phone, email")
+          .eq("id", order.store_id)
+          .single(),
+      ])
+    );
 
-  // Fetch status history
-  const { data: history } = await supabase
-    .from("order_status_history")
-    .select("id, status, changed_by, changed_at")
-    .eq("order_id", orderId)
-    .order("changed_at", { ascending: true });
+  const items = itemsRes.data;
+  const history = historyRes.data;
+  const storeName = storeRes.data?.name ?? null;
+  const invoiceId: string | null = invoiceRes.data?.id ?? null;
+  const financialSettings = financialRes.data;
+  const storeBilling = storeBillingRes.data;
 
-  // Resolve names for status history changed_by users
+  // Resolve names for status history changed_by users + submitter
   const changedByMap: Record<string, string> = {};
-  if (history && history.length > 0) {
-    const uniqueUserIds = [...new Set(history.map((h) => h.changed_by))];
+  const isAdmin = profile.role === "admin" || profile.role === "commissary";
+
+  const uniqueUserIds = [...new Set([
+    ...(history ?? []).map((h) => h.changed_by),
+    order.submitted_by,
+  ])];
+  if (uniqueUserIds.length > 0) {
     const adminClient = createAdminClient();
-    const results = await Promise.all(
-      uniqueUserIds.map((uid) => adminClient.auth.admin.getUserById(uid))
+    const results = await timer.time(
+      `admin.getUserById x${uniqueUserIds.length}`,
+      () =>
+        Promise.all(
+          uniqueUserIds.map((uid) => adminClient.auth.admin.getUserById(uid))
+        )
     );
     for (const { data } of results) {
       if (data?.user) {
@@ -81,45 +117,11 @@ export default async function OrderDetailPage({
       }
     }
   }
-
-  // Fetch store name for all roles (needed for PDF export)
-  const isAdmin = profile.role === "admin" || profile.role === "commissary";
-  let submitterName: string | null = null;
-
-  const { data: storeRow } = await supabase
-    .from("stores")
-    .select("name")
-    .eq("id", order.store_id)
-    .single();
-  const storeName = storeRow?.name ?? null;
-
-  if (isAdmin) {
-    const adminClient = createAdminClient();
-    const { data: submitterAuth } = await adminClient.auth.admin.getUserById(order.submitted_by);
-    submitterName =
-      (submitterAuth?.user?.user_metadata?.name as string | undefined) ??
-      submitterAuth?.user?.email ??
-      null;
-  }
+  const submitterName = changedByMap[order.submitted_by] ?? null;
 
   const orderItems = items ?? [];
   const statusHistory = history ?? [];
   const status = order.status as OrderStatus;
-
-  // Check for linked invoice (fulfilled orders have invoices)
-  let invoiceId: string | null = null;
-  const { data: invoice } = await supabase
-    .from("invoices")
-    .select("id")
-    .eq("order_id", order.id)
-    .maybeSingle();
-  invoiceId = invoice?.id ?? null;
-
-  // Fetch financial settings for tax/fee calculation + company info
-  const { data: financialSettings } = await supabase
-    .from("financial_settings")
-    .select("key, value")
-    .in("key", ["hst_rate", "ad_royalties_fee", "commissary_name", "commissary_address", "commissary_postal_code", "commissary_phone"]);
 
   const fsMap: Record<string, string> = {};
   for (const row of financialSettings ?? []) fsMap[row.key] = row.value;
@@ -131,12 +133,7 @@ export default async function OrderDetailPage({
   const companyAddress = [fsMap.commissary_address, fsMap.commissary_postal_code].filter(Boolean).join("\n") || null;
   const companyPhone = fsMap.commissary_phone ?? null;
 
-  // Fetch store billing info for PDF
-  const { data: storeBilling } = await supabase
-    .from("stores")
-    .select("business_name, address, postal_code, phone, email")
-    .eq("id", order.store_id)
-    .single();
+  timer.summary();
 
   // Calculate order total from items
   const subtotal = orderItems.reduce(
@@ -204,6 +201,7 @@ export default async function OrderDetailPage({
               order_number: order.order_number,
               status: order.status,
               created_at: order.created_at,
+              submitted_by_name: submitterName,
               company_name: companyName,
               company_address: companyAddress,
               company_tax_id: companyPhone,

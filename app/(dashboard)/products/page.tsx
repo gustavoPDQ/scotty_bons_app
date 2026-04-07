@@ -1,37 +1,41 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getUser, getProfile } from "@/lib/supabase/auth-cache";
+import { createPageTimer } from "@/lib/perf";
 import { CatalogAdmin } from "@/components/products/catalog-admin";
 import { CatalogBrowser } from "@/components/products/catalog-browser";
 import type { CategoryRow, ProductRow, ProductModifierRow } from "@/lib/types";
 
 export default async function ProductsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const timer = createPageTimer("Products");
 
+  const user = await timer.time("auth.getUser(cached)", () => getUser());
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-
+  const profile = await timer.time("profiles.select(cached)", () => getProfile());
   if (profile?.role === "commissary") redirect("/orders");
 
   const isAdmin = profile?.role === "admin";
+  const supabase = await createClient();
 
-  const { data: categoriesRaw, error: categoriesError } = await supabase
-    .from("product_categories")
-    .select("id, name, sort_order")
-    .order("sort_order");
+  const [categoriesRes, productsRes] = await timer.time("parallel-queries", () =>
+    Promise.all([
+      supabase
+        .from("product_categories")
+        .select("id, name, sort_order")
+        .order("sort_order"),
+      supabase
+        .from("products")
+        .select("id, name, category_id, image_url, sort_order, product_modifiers(id, label, price, sort_order)")
+        .eq("active", true)
+        .order("sort_order"),
+    ])
+  );
 
-  const { data: productsRaw, error: productsError } = await supabase
-    .from("products")
-    .select("id, name, category_id, image_url, sort_order, product_modifiers(id, label, price, sort_order)")
-    .eq("active", true)
-    .order("sort_order");
+  timer.summary();
+
+  const { data: categoriesRaw, error: categoriesError } = categoriesRes;
+  const { data: productsRaw, error: productsError } = productsRes;
 
   const queryError = categoriesError || productsError;
 

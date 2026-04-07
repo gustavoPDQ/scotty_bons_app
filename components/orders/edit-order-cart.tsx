@@ -215,7 +215,7 @@ export function EditOrderCart({ orderId, categories, products, currentItems }: E
                             });
                           }
                         }}
-                        className="w-16 text-center h-8"
+                        className="w-16 text-center h-8 px-1 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
                       />
                       <Button
                         variant="outline"

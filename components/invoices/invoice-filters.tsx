@@ -29,6 +29,8 @@ export function InvoiceFilters({ role, stores }: InvoiceFiltersProps) {
   const currentStoreId = searchParams.get("store_id") ?? "";
 
   const [searchText, setSearchText] = useState(currentQ);
+  const [fromDate, setFromDate] = useState(currentFrom);
+  const [toDate, setToDate] = useState(currentTo);
 
   const hasFilters = !!(currentFrom || currentTo || currentQ || currentStoreId);
 
@@ -49,6 +51,8 @@ export function InvoiceFilters({ role, stores }: InvoiceFiltersProps) {
 
   function clearAll() {
     setSearchText("");
+    setFromDate("");
+    setToDate("");
     startTransition(() => {
       router.push("/invoices");
     });
@@ -70,8 +74,9 @@ export function InvoiceFilters({ role, stores }: InvoiceFiltersProps) {
         </label>
         <input
           type="date"
-          value={currentFrom}
-          onChange={(e) => updateParams({ from: e.target.value })}
+          value={fromDate}
+          onChange={(e) => setFromDate(e.target.value)}
+          onBlur={() => { if (fromDate !== currentFrom) updateParams({ from: fromDate }); }}
           className="flex h-10 w-full rounded-xl border border-input bg-muted/50 px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary"
         />
       </div>
@@ -82,8 +87,9 @@ export function InvoiceFilters({ role, stores }: InvoiceFiltersProps) {
         </label>
         <input
           type="date"
-          value={currentTo}
-          onChange={(e) => updateParams({ to: e.target.value })}
+          value={toDate}
+          onChange={(e) => setToDate(e.target.value)}
+          onBlur={() => { if (toDate !== currentTo) updateParams({ to: toDate }); }}
           className="flex h-10 w-full rounded-xl border border-input bg-muted/50 px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary"
         />
       </div>

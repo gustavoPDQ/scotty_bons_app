@@ -1,27 +1,24 @@
-import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/shared/sidebar";
 import { Header } from "@/components/shared/header";
+import { getUser, getProfile } from "@/lib/supabase/auth-cache";
+import { createPageTimer } from "@/lib/perf";
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const timer = createPageTimer("Layout");
+  const user = await timer.time("auth.getUser(cached)", () => getUser());
 
   if (!user) {
     redirect("/login");
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
+  const profile = await timer.time("profiles.select(cached)", () => getProfile());
+
+  timer.summary();
 
   const role = profile?.role ?? "store";
   const userName = (user.user_metadata?.name as string | undefined) ?? user.email ?? "";

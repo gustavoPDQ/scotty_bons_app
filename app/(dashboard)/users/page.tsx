@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getUser, getProfile } from "@/lib/supabase/auth-cache";
 import { UsersPageClient } from "@/components/users/users-page-client";
 import type { UserRow, StoreRow } from "@/lib/types";
 
@@ -11,19 +12,10 @@ export default async function UsersPage({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const user = await getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-
+  const profile = await getProfile();
   if (profile?.role !== "admin") redirect("/orders");
 
   const params = await searchParams;
