@@ -89,12 +89,27 @@ export default async function OrdersPage({
     query = query.eq("store_id", storeFilter);
   }
 
-  const { data: ordersRaw } = await timer.time("orders.select", () => query);
+  // Fetch orders + all stores in parallel (stores needed for both filter dropdown and display names)
+  const [ordersRes, allStoresRes] = await timer.time("orders+stores(parallel)", () =>
+    Promise.all([
+      query,
+      !isStore
+        ? supabase.from("stores").select("id, name").order("name")
+        : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    ])
+  );
+
+  let orders = ordersRes.data ?? [];
+  const allStores = allStoresRes.data ?? [];
+
+  // Build store name map from the single stores query
+  const storeNames: Record<string, string> = {};
+  for (const store of allStores) {
+    storeNames[store.id] = store.name;
+  }
 
   // Fetch item counts and totals per order
-  let orders = ordersRaw ?? [];
   const orderIds = orders.map((o) => o.id);
-
   const itemSummaries: Record<string, { count: number; total: number }> = {};
   if (orderIds.length > 0) {
     const { data: items } = await timer.time("order_items.select", () =>
@@ -117,24 +132,6 @@ export default async function OrdersPage({
     }
   }
 
-  // For admin/commissary roles, fetch store names to display on each order
-  const storeNames: Record<string, string> = {};
-  if (!isStore && orders.length > 0) {
-    const storeIds = [...new Set(orders.map((o) => o.store_id))];
-    const { data: stores } = await timer.time("stores.byOrders", () =>
-      supabase
-        .from("stores")
-        .select("id, name")
-        .in("id", storeIds)
-    );
-
-    if (stores) {
-      for (const store of stores) {
-        storeNames[store.id] = store.name;
-      }
-    }
-  }
-
   // Apply text search post-filter
   if (textFilter) {
     const q = textFilter.toLowerCase();
@@ -144,18 +141,6 @@ export default async function OrdersPage({
         (o.order_number ?? "").toLowerCase().includes(q) ||
         (storeNames[o.store_id] ?? "").toLowerCase().includes(q),
     );
-  }
-
-  // Fetch all stores for the filter dropdown (admin/commissary only)
-  let allStores: { id: string; name: string }[] = [];
-  if (!isStore) {
-    const { data: storesData } = await timer.time("stores.allForFilter", () =>
-      supabase
-        .from("stores")
-        .select("id, name")
-        .order("name")
-    );
-    allStores = storesData ?? [];
   }
 
   timer.summary();

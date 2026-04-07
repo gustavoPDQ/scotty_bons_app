@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { FileText } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getUser, getProfile } from "@/lib/supabase/auth-cache";
+import { createPageTimer } from "@/lib/perf";
 import { Card, CardContent } from "@/components/ui/card";
 import { InvoiceFilters } from "@/components/invoices/invoice-filters";
 import { InvoiceListWithSelection } from "@/components/invoices/invoice-list-with-selection";
@@ -21,12 +22,13 @@ export default async function InvoicesPage({
     q?: string;
   }>;
 }) {
+  const timer = createPageTimer("Invoices");
   const params = await searchParams;
 
-  const user = await getUser();
+  const user = await timer.time("auth.getUser(cached)", () => getUser());
   if (!user) redirect("/login");
 
-  const profile = await getProfile();
+  const profile = await timer.time("profiles.select(cached)", () => getProfile());
   if (!profile) redirect("/login");
 
   const supabase = await createClient();
@@ -34,17 +36,7 @@ export default async function InvoicesPage({
   const role = profile.role;
   const isStore = role === "store";
 
-  // Fetch stores for filter dropdown (admin/commissary only)
-  let allStores: { id: string; name: string }[] = [];
-  if (!isStore) {
-    const { data: storesData } = await supabase
-      .from("stores")
-      .select("id, name")
-      .order("name");
-    allStores = storesData ?? [];
-  }
-
-  // Build query with optional filters
+  // Build invoices query with optional filters
   let query = supabase
     .from("invoices")
     .select(
@@ -52,7 +44,6 @@ export default async function InvoicesPage({
     )
     .order("created_at", { ascending: false });
 
-  // Apply filters (admin/commissary only)
   if (!isStore) {
     if (params.store_id && isValidUUID(params.store_id)) {
       query = query.eq("store_id", params.store_id);
@@ -68,46 +59,45 @@ export default async function InvoicesPage({
     query = query.ilike("invoice_number", `%${params.q}%`);
   }
 
-  const { data: invoices } = await query;
-  const invoiceList = invoices ?? [];
+  // Fetch invoices + all stores in parallel
+  const [invoicesRes, allStoresRes] = await timer.time("invoices+stores(parallel)", () =>
+    Promise.all([
+      query,
+      !isStore
+        ? supabase.from("stores").select("id, name").order("name")
+        : isStore && profile.store_id
+          ? supabase.from("stores").select("id, name").eq("id", profile.store_id)
+          : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    ])
+  );
 
-  // Fetch store names
+  const invoiceList = invoicesRes.data ?? [];
+  const allStores = allStoresRes.data ?? [];
+
+  // Build store name map from single stores query
   const storeNames: Record<string, string> = {};
-  if (!isStore && invoiceList.length > 0) {
-    const storeIds = [...new Set(invoiceList.map((inv) => inv.store_id))];
-    const { data: stores } = await supabase
-      .from("stores")
-      .select("id, name")
-      .in("id", storeIds);
-    if (stores) {
-      for (const store of stores) {
-        storeNames[store.id] = store.name;
-      }
-    }
-  }
-  if (isStore && profile.store_id) {
-    const { data: store } = await supabase
-      .from("stores")
-      .select("name")
-      .eq("id", profile.store_id)
-      .single();
-    if (store) storeNames[profile.store_id] = store.name;
+  for (const store of allStores) {
+    storeNames[store.id] = store.name;
   }
 
   // Fetch order dates
   const orderDates: Record<string, string> = {};
   if (invoiceList.length > 0) {
     const orderIds = [...new Set(invoiceList.map((inv) => inv.order_id))];
-    const { data: orders } = await supabase
-      .from("orders")
-      .select("id, created_at")
-      .in("id", orderIds);
+    const { data: orders } = await timer.time("orders.dates", () =>
+      supabase
+        .from("orders")
+        .select("id, created_at")
+        .in("id", orderIds)
+    );
     if (orders) {
       for (const order of orders) {
         orderDates[order.id] = order.created_at;
       }
     }
   }
+
+  timer.summary();
 
   // Prepare serializable invoice data for client component
   const invoiceData = invoiceList.map((invoice) => ({

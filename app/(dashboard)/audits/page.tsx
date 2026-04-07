@@ -83,47 +83,44 @@ export default async function AuditsPage({
   const { data: auditsRaw } = await timer.time("audits.select", () => query);
   const audits: AuditRow[] = [];
 
+  // Fetch all stores (used for both display names AND filter dropdown) + active templates in parallel with audit enrichment
+  const allStoresPromise = role !== "store"
+    ? supabase.from("stores").select("id, name").order("name")
+    : Promise.resolve({ data: [] as { id: string; name: string }[] });
+  const activeTemplatesPromise = canConduct
+    ? supabase.from("audit_templates").select("id, name").eq("is_active", true).order("name")
+    : Promise.resolve({ data: [] as { id: string; name: string }[] });
+
   if (auditsRaw && auditsRaw.length > 0) {
-    // Fetch store names
+    // Fetch stores, templates by audit, and conductor names ALL in parallel
     const storeIds = [...new Set(auditsRaw.map((a) => a.store_id))];
-    const { data: stores } = await timer.time("stores.byAudits", () =>
-      supabase
-        .from("stores")
-        .select("id, name")
-        .in("id", storeIds)
-    );
-    const storeNames: Record<string, string> = {};
-    for (const s of stores ?? []) {
-      storeNames[s.id] = s.name;
-    }
-
-    // Fetch template names
     const templateIds = [...new Set(auditsRaw.map((a) => a.template_id))];
-    const { data: templates } = await timer.time("templates.byAudits", () =>
-      supabase
-        .from("audit_templates")
-        .select("id, name")
-        .in("id", templateIds)
-    );
-    const templateNames: Record<string, string> = {};
-    for (const t of templates ?? []) {
-      templateNames[t.id] = t.name;
-    }
-
-    // Fetch conductor names from auth.users via admin API
     const conductorIds = [...new Set(auditsRaw.map((a) => a.conducted_by))];
     const adminClient = createAdminClient();
-    const conductorResults = await timer.time(
-      `admin.getUserById x${conductorIds.length}`,
+
+    const [storesRes, templatesRes, ...conductorResults] = await timer.time(
+      `enrichment(parallel): stores+templates+users x${conductorIds.length}`,
       () =>
-        Promise.all(
-          conductorIds.map((id) => adminClient.auth.admin.getUserById(id)),
-        )
+        Promise.all([
+          supabase.from("stores").select("id, name").in("id", storeIds),
+          supabase.from("audit_templates").select("id, name").in("id", templateIds),
+          ...conductorIds.map((id) => adminClient.auth.admin.getUserById(id)),
+        ])
     );
+
+    const storeNames: Record<string, string> = {};
+    for (const s of (storesRes as { data: { id: string; name: string }[] | null }).data ?? []) {
+      storeNames[s.id] = s.name;
+    }
+    const templateNames: Record<string, string> = {};
+    for (const t of (templatesRes as { data: { id: string; name: string }[] | null }).data ?? []) {
+      templateNames[t.id] = t.name;
+    }
     const conductorNames: Record<string, string> = {};
     for (const r of conductorResults) {
-      if (r.data?.user) {
-        const u = r.data.user;
+      const res = r as { data: { user: { id: string; user_metadata?: { name?: string }; email?: string } } | null };
+      if (res.data?.user) {
+        const u = res.data.user;
         conductorNames[u.id] = (u.user_metadata?.name as string | undefined) ?? u.email ?? "";
       }
     }
@@ -138,30 +135,12 @@ export default async function AuditsPage({
     }
   }
 
-  // Fetch stores for filter + new audit dialog
-  let allStores: { id: string; name: string }[] = [];
-  if (role !== "store") {
-    const { data: storesData } = await timer.time("stores.allForFilter", () =>
-      supabase
-        .from("stores")
-        .select("id, name")
-        .order("name")
-    );
-    allStores = storesData ?? [];
-  }
-
-  // Fetch active templates for new audit dialog (admin + commissary)
-  let activeTemplates: { id: string; name: string }[] = [];
-  if (canConduct) {
-    const { data: templatesData } = await timer.time("templates.active", () =>
-      supabase
-        .from("audit_templates")
-        .select("id, name")
-        .eq("is_active", true)
-        .order("name")
-    );
-    activeTemplates = templatesData ?? [];
-  }
+  // Await the stores/templates that were kicked off earlier
+  const [allStoresRes, activeTemplatesRes] = await timer.time("stores+templates(parallel)", () =>
+    Promise.all([allStoresPromise, activeTemplatesPromise])
+  );
+  const allStores = allStoresRes.data ?? [];
+  const activeTemplates = activeTemplatesRes.data ?? [];
 
   timer.summary();
 
