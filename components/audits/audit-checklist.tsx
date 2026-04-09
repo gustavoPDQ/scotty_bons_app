@@ -7,16 +7,15 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type {
   AuditTemplateCategoryRow,
   AuditTemplateItemRow,
   AuditResponseRow,
   AuditEvidenceRow,
-  AuditRating,
+  RatingOption,
 } from "@/lib/types";
-import { AUDIT_RATING_LABELS, AUDIT_RATING_STYLES } from "@/lib/constants/audit-status";
+import { getRatingStyle } from "@/lib/constants/audit-status";
 import { saveAuditResponse, completeAudit } from "@/app/(dashboard)/audits/actions";
 import { AuditEvidenceUploader } from "@/components/audits/audit-evidence-uploader";
 
@@ -26,16 +25,15 @@ interface AuditChecklistProps {
   items: AuditTemplateItemRow[];
   existingResponses: AuditResponseRow[];
   existingEvidence: AuditEvidenceRow[];
+  ratingOptions: RatingOption[];
 }
 
 interface ResponseState {
   id?: string;
-  rating: AuditRating;
+  rating: string;
   notes: string;
   saving: boolean;
 }
-
-const RATING_OPTIONS: AuditRating[] = ["poor", "satisfactory", "good"];
 
 export function AuditChecklist({
   auditId,
@@ -43,6 +41,7 @@ export function AuditChecklist({
   items,
   existingResponses,
   existingEvidence,
+  ratingOptions,
 }: AuditChecklistProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -85,17 +84,20 @@ export function AuditChecklist({
       .sort((a, b) => a.sort_order - b.sort_order);
   }
 
+  // Rating lookup
+  const ratingMap = new Map(ratingOptions.map((r) => [r.key, r]));
+
   const handleRating = useCallback(
-    async (itemId: string, rating: AuditRating) => {
+    async (itemId: string, ratingKey: string) => {
       setResponses((prev) => ({
         ...prev,
-        [itemId]: { ...prev[itemId], rating, notes: prev[itemId]?.notes ?? "", saving: true },
+        [itemId]: { ...prev[itemId], rating: ratingKey, notes: prev[itemId]?.notes ?? "", saving: true },
       }));
 
       const result = await saveAuditResponse({
         audit_id: auditId,
         template_item_id: itemId,
-        rating,
+        rating: ratingKey,
         notes: responsesRef.current[itemId]?.notes || undefined,
       });
 
@@ -166,10 +168,11 @@ export function AuditChecklist({
   const totalItems = items.length;
   const answeredCount = Object.keys(responses).length;
 
-  const ratingWeights: Record<AuditRating, number> = { poor: 0, satisfactory: 0.5, good: 1 };
-  const ratingCounts = { poor: 0, satisfactory: 0, good: 0 };
+  // Count ratings by key
+  const ratingCounts: Record<string, number> = {};
+  for (const opt of ratingOptions) ratingCounts[opt.key] = 0;
   for (const r of Object.values(responses)) {
-    ratingCounts[r.rating]++;
+    ratingCounts[r.rating] = (ratingCounts[r.rating] ?? 0) + 1;
   }
 
   const handleEvidenceChange = useCallback(
@@ -189,18 +192,15 @@ export function AuditChecklist({
               {answeredCount} of {totalItems} rated
             </span>
             <span className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm">
-              <span className="flex items-center gap-1">
-                <span className="size-2 sm:size-2.5 rounded-full bg-green-500" />
-                {ratingCounts.good}
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="size-2 sm:size-2.5 rounded-full bg-yellow-500" />
-                {ratingCounts.satisfactory}
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="size-2 sm:size-2.5 rounded-full bg-red-500" />
-                {ratingCounts.poor}
-              </span>
+              {ratingOptions.map((opt) => (
+                <span key={opt.key} className="flex items-center gap-1">
+                  <span
+                    className="size-2 sm:size-2.5 rounded-full"
+                    style={{ backgroundColor: (getRatingStyle(opt.weight).backgroundColor as string) }}
+                  />
+                  {ratingCounts[opt.key] ?? 0}
+                </span>
+              ))}
             </span>
           </div>
           <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
@@ -256,24 +256,24 @@ export function AuditChecklist({
                           )}
                         </div>
 
-                        {/* 3-button rating selector */}
-                        <div className="flex gap-1 shrink-0">
-                          {RATING_OPTIONS.map((rating) => {
-                            const isActive = response?.rating === rating;
+                        {/* Dynamic rating selector */}
+                        <div className="flex gap-1 shrink-0 flex-wrap">
+                          {ratingOptions.map((opt) => {
+                            const isActive = response?.rating === opt.key;
                             return (
                               <button
-                                key={rating}
+                                key={opt.key}
                                 type="button"
                                 disabled={response?.saving}
-                                onClick={() => handleRating(item.id, rating)}
+                                onClick={() => handleRating(item.id, opt.key)}
                                 className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-colors ${
                                   isActive
                                     ? ""
                                     : "bg-background text-muted-foreground border-border hover:border-foreground/30"
                                 }`}
-                                style={isActive ? AUDIT_RATING_STYLES[rating] : undefined}
+                                style={isActive ? getRatingStyle(opt.weight) : undefined}
                               >
-                                {AUDIT_RATING_LABELS[rating]}
+                                {opt.label}
                               </button>
                             );
                           })}

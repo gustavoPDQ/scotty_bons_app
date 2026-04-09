@@ -45,8 +45,9 @@ export async function createTemplate(
     .insert({
       name: parsed.data.name,
       description: parsed.data.description ?? null,
+      ...(parsed.data.rating_options ? { rating_labels: parsed.data.rating_options } : {}),
     })
-    .select("id, name, description, is_active, created_at, updated_at")
+    .select("id, name, description, is_active, rating_labels, created_at, updated_at")
     .single();
 
   if (error) {
@@ -125,6 +126,7 @@ export async function updateTemplate(
     .update({
       name: parsed.data.name,
       description: parsed.data.description ?? null,
+      ...(parsed.data.rating_options ? { rating_labels: parsed.data.rating_options } : {}),
     })
     .eq("id", templateId)
     .select("id")

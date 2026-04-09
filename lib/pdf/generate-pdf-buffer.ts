@@ -317,22 +317,19 @@ export function generateInvoicePdfBuffer(
 
 // ── Audit PDF Buffer ────────────────────────────────────────────────────────
 
-import { AUDIT_RATING_LABELS } from "@/lib/constants/audit-status";
-import type { AuditRating } from "@/lib/types";
-
-const RATING_COLORS: Record<string, [number, number, number]> = {
-  good: [34, 197, 94],
-  satisfactory: [234, 179, 8],
-  poor: [239, 68, 68],
-};
+import type { RatingOption } from "@/lib/types";
+import { DEFAULT_RATING_OPTIONS } from "@/lib/types";
+import { getRatingPdfColor } from "@/lib/constants/audit-status";
 
 export function generateAuditPdfBuffer(
   audit: { score: number | null; conducted_at: string | null; notes: string | null },
-  categories: { name: string; items: { label: string; rating: AuditRating | null; notes: string | null }[] }[],
+  categories: { name: string; items: { label: string; rating: string | null; notes: string | null }[] }[],
   storeName: string,
   templateName: string,
   conductorName: string,
+  ratingOptions: RatingOption[] = DEFAULT_RATING_OPTIONS,
 ): Buffer {
+  const ratingMap = new Map(ratingOptions.map((r) => [r.key, r]));
   const doc = new jsPDF();
   const dateFmt = new Intl.DateTimeFormat("en-CA", { dateStyle: "long" });
 
@@ -360,7 +357,7 @@ export function generateAuditPdfBuffer(
 
     const tableData = cat.items.map((item) => [
       item.label,
-      item.rating ? AUDIT_RATING_LABELS[item.rating] : "—",
+      item.rating ? (ratingMap.get(item.rating)?.label ?? item.rating) : "—",
       item.notes ?? "",
     ]);
 
@@ -375,8 +372,9 @@ export function generateAuditPdfBuffer(
       didParseCell: (data) => {
         if (data.section === "body" && data.column.index === 1) {
           const rating = cat.items[data.row.index]?.rating;
-          if (rating && RATING_COLORS[rating]) {
-            data.cell.styles.textColor = RATING_COLORS[rating];
+          const opt = rating ? ratingMap.get(rating) : undefined;
+          if (opt) {
+            data.cell.styles.textColor = getRatingPdfColor(opt.weight);
             data.cell.styles.fontStyle = "bold";
           }
         }

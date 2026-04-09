@@ -227,6 +227,7 @@ export function TemplatesClient({ templates, allCategories, allItems }: Template
                 ? {
                     name: editingTemplate.name,
                     description: editingTemplate.description ?? undefined,
+                    rating_options: editingTemplate.rating_labels,
                     categories: getCategoriesForTemplate(editingTemplate.id),
                   }
                 : undefined

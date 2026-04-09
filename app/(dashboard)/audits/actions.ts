@@ -9,9 +9,11 @@ import {
   createAuditSchema,
   saveResponseSchema,
   completeAuditSchema,
+  updateResponseSchema,
   type CreateAuditValues,
   type SaveResponseValues,
   type CompleteAuditValues,
+  type UpdateResponseValues,
 } from "@/lib/validations/audits";
 import { notifyAuditCompleted } from "@/lib/email/audit-notifications";
 
@@ -162,19 +164,32 @@ export async function completeAudit(
     };
   }
 
-  // Compute weighted score: poor=0, satisfactory=0.5, good=1
+  // Fetch template rating options for weight lookup
+  const { data: templateConfig } = await auth.supabase
+    .from("audit_templates")
+    .select("rating_labels")
+    .eq("id", audit.template_id)
+    .single();
+
+  const ratingOptions = (templateConfig?.rating_labels ?? []) as import("@/lib/types").RatingOption[];
+  const weightMap: Record<string, number> = {};
+  let maxWeight = 1;
+  for (const opt of ratingOptions) {
+    weightMap[opt.key] = opt.weight;
+    if (opt.weight > maxWeight) maxWeight = opt.weight;
+  }
+
   const { data: allResponses } = await auth.supabase
     .from("audit_responses")
     .select("rating")
     .eq("audit_id", audit.id);
 
-  const ratingWeights: Record<string, number> = { poor: 0, satisfactory: 0.5, good: 1 };
   const sumWeights = (allResponses ?? []).reduce(
-    (sum, r) => sum + (ratingWeights[r.rating] ?? 0),
+    (sum, r) => sum + (weightMap[r.rating] ?? 0),
     0
   );
   const score =
-    totalItems > 0 ? Math.round((sumWeights / totalItems) * 10000) / 100 : 0;
+    totalItems > 0 ? Math.round((sumWeights / (totalItems * maxWeight)) * 10000) / 100 : 0;
 
   const { error } = await auth.supabase
     .from("audits")
@@ -198,7 +213,7 @@ export async function completeAudit(
     const adminClient = createAdminClient();
     const [{ data: storeData }, { data: templateData }, conductorResult] = await Promise.all([
       auth.supabase.from("stores").select("name").eq("id", audit.store_id).single(),
-      auth.supabase.from("audit_templates").select("name").eq("id", audit.template_id).single(),
+      auth.supabase.from("audit_templates").select("name, rating_labels").eq("id", audit.template_id).single(),
       adminClient.auth.admin.getUserById(auth.userId),
     ]);
     const conductorUser = conductorResult.data?.user;
@@ -225,7 +240,7 @@ export async function completeAudit(
         .sort((a, b) => a.sort_order - b.sort_order)
         .map((i) => ({
           label: i.label,
-          rating: (responseMap[i.id]?.rating as import("@/lib/types").AuditRating) ?? null,
+          rating: responseMap[i.id]?.rating ?? null,
           notes: responseMap[i.id]?.notes ?? null,
         })),
     }));
@@ -239,11 +254,82 @@ export async function completeAudit(
       conductorName,
       auditData: { score, conducted_at: new Date().toISOString(), notes: parsed.data.notes ?? null },
       categories: pdfCategories,
+      ratingOptions: templateData?.rating_labels as import("@/lib/types").RatingOption[] | undefined,
     });
   } catch (e) {
     console.error("[email] Failed to notify audit completed:", e);
   }
 
+  return { data: { score }, error: null };
+}
+
+export async function updateAuditResponse(
+  values: UpdateResponseValues
+): Promise<ActionResult<{ score: number }>> {
+  const parsed = updateResponseSchema.safeParse(values);
+  if (!parsed.success) {
+    return { data: null, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+  }
+
+  const supabase = await verifyAdmin();
+  if (!supabase) return { data: null, error: "Unauthorized." };
+
+  // Verify audit exists and is completed
+  const { data: audit } = await supabase
+    .from("audits")
+    .select("id, template_id, conducted_at")
+    .eq("id", parsed.data.audit_id)
+    .single();
+
+  if (!audit) return { data: null, error: "Audit not found." };
+  if (!audit.conducted_at) {
+    return { data: null, error: "Only completed audits can be edited." };
+  }
+
+  // Update the response
+  const { error: updateError } = await supabase
+    .from("audit_responses")
+    .update({
+      rating: parsed.data.rating,
+      notes: parsed.data.notes ?? null,
+    })
+    .eq("id", parsed.data.response_id)
+    .eq("audit_id", parsed.data.audit_id);
+
+  if (updateError) {
+    return { data: null, error: "Failed to update response. Please try again." };
+  }
+
+  // Recalculate score using template rating weights
+  const [{ count: totalItems }, { data: tplConfig }, { data: allResponses }] = await Promise.all([
+    supabase.from("audit_template_items").select("id", { count: "exact", head: true }).eq("template_id", audit.template_id),
+    supabase.from("audit_templates").select("rating_labels").eq("id", audit.template_id).single(),
+    supabase.from("audit_responses").select("rating").eq("audit_id", audit.id),
+  ]);
+
+  const opts = (tplConfig?.rating_labels ?? []) as import("@/lib/types").RatingOption[];
+  const wm: Record<string, number> = {};
+  let mw = 1;
+  for (const o of opts) { wm[o.key] = o.weight; if (o.weight > mw) mw = o.weight; }
+
+  const sumWeights = (allResponses ?? []).reduce(
+    (sum, r) => sum + (wm[r.rating] ?? 0),
+    0
+  );
+  const total = totalItems ?? allResponses?.length ?? 1;
+  const score = total > 0 ? Math.round((sumWeights / (total * mw)) * 10000) / 100 : 0;
+
+  const { error: scoreError } = await supabase
+    .from("audits")
+    .update({ score })
+    .eq("id", audit.id);
+
+  if (scoreError) {
+    return { data: null, error: "Response updated but failed to recalculate score." };
+  }
+
+  revalidatePath(`/audits/${audit.id}`);
+  revalidatePath("/audits");
   return { data: { score }, error: null };
 }
 

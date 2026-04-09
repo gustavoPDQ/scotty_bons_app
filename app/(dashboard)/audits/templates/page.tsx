@@ -16,7 +16,7 @@ export default async function AuditTemplatesPage() {
   // Fetch templates
   const { data: templatesRaw } = await supabase
     .from("audit_templates")
-    .select("id, name, description, is_active, created_at, updated_at")
+    .select("id, name, description, is_active, rating_labels, created_at, updated_at")
     .order("created_at", { ascending: false });
 
   const templates: AuditTemplateRow[] = [];

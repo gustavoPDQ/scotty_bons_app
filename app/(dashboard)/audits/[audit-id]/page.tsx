@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import { DeleteAuditButton } from "@/components/audits/delete-audit-button";
+import { EditableAuditRating } from "@/components/audits/editable-audit-rating";
 import { ExportAuditPdfButton } from "@/components/audits/export-audit-pdf-button";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -11,8 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  AUDIT_RATING_LABELS,
-  AUDIT_RATING_STYLES,
+  getRatingStyle,
   getScoreColor,
   getScoreLabel,
 } from "@/lib/constants/audit-status";
@@ -21,7 +21,9 @@ import type {
   AuditTemplateItemRow,
   AuditResponseRow,
   AuditEvidenceRow,
+  RatingOption,
 } from "@/lib/types";
+import { DEFAULT_RATING_OPTIONS } from "@/lib/types";
 
 export default async function AuditDetailPage({
   params,
@@ -64,7 +66,7 @@ export default async function AuditDetailPage({
     { data: responses },
   ] = await Promise.all([
     supabase.from("stores").select("name").eq("id", audit.store_id).single(),
-    supabase.from("audit_templates").select("name").eq("id", audit.template_id).single(),
+    supabase.from("audit_templates").select("name, rating_labels").eq("id", audit.template_id).single(),
     admin.auth.admin.getUserById(audit.conducted_by),
     supabase
       .from("audit_template_categories")
@@ -86,6 +88,9 @@ export default async function AuditDetailPage({
     (conductorResult.data?.user?.user_metadata?.name as string | undefined) ??
     conductorResult.data?.user?.email ??
     "—";
+
+  const ratingOptions = (template?.rating_labels as RatingOption[]) ?? DEFAULT_RATING_OPTIONS;
+  const ratingMap = new Map(ratingOptions.map((r) => [r.key, r]));
 
   const categories = (templateCategories ?? []) as AuditTemplateCategoryRow[];
   const items = (templateItems ?? []) as AuditTemplateItemRow[];
@@ -127,9 +132,10 @@ export default async function AuditDetailPage({
     }).format(new Date(timestamp));
 
   // Rating summary
-  const ratingCounts = { good: 0, satisfactory: 0, poor: 0 };
+  const ratingCounts: Record<string, number> = {};
+  for (const opt of ratingOptions) ratingCounts[opt.key] = 0;
   for (const r of responseList) {
-    ratingCounts[r.rating]++;
+    ratingCounts[r.rating] = (ratingCounts[r.rating] ?? 0) + 1;
   }
 
   return (
@@ -184,6 +190,7 @@ export default async function AuditDetailPage({
               storeName={store?.name ?? "Unknown Store"}
               templateName={template?.name ?? "Audit"}
               conductorName={conductorName}
+              ratingOptions={ratingOptions}
             />
           )}
           {canConduct && !isCompleted && (
@@ -242,7 +249,9 @@ export default async function AuditDetailPage({
               <div className="text-right">
                 <p className="text-lg font-semibold">{getScoreLabel(audit.score)}</p>
                 <p className="text-sm text-muted-foreground">
-                  {ratingCounts.good} good · {ratingCounts.satisfactory} satisfactory · {ratingCounts.poor} poor
+                  {ratingOptions.map((opt, i) => (
+                    <span key={opt.key}>{i > 0 && " · "}{ratingCounts[opt.key] ?? 0} {opt.label.toLowerCase()}</span>
+                  ))}
                 </p>
               </div>
             </div>
@@ -282,20 +291,20 @@ export default async function AuditDetailPage({
                   {(() => {
                     const ratedItems = catItems.filter((i) => responseMap[i.id]);
                     if (ratedItems.length === 0) return null;
-                    const ratingValues = { good: 2, satisfactory: 1, poor: 0 };
+                    const maxWeight = Math.max(...ratingOptions.map((o) => o.weight), 1);
                     const total = ratedItems.reduce(
-                      (sum, i) => sum + ratingValues[responseMap[i.id].rating],
+                      (sum, i) => sum + (ratingMap.get(responseMap[i.id].rating)?.weight ?? 0),
                       0
                     );
-                    const maxScore = ratedItems.length * 2;
-                    const pct = Math.round((total / maxScore) * 100);
-                    const good = ratedItems.filter((i) => responseMap[i.id].rating === "good").length;
-                    const satisfactory = ratedItems.filter((i) => responseMap[i.id].rating === "satisfactory").length;
-                    const poor = ratedItems.filter((i) => responseMap[i.id].rating === "poor").length;
+                    const pct = Math.round((total / (ratedItems.length * maxWeight)) * 100);
+                    const counts: Record<string, number> = {};
+                    for (const i of ratedItems) counts[responseMap[i.id].rating] = (counts[responseMap[i.id].rating] ?? 0) + 1;
                     return (
                       <div className="flex items-center gap-3 text-xs">
                         <span className="text-muted-foreground">
-                          {good} good · {satisfactory} satisfactory · {poor} poor
+                          {ratingOptions.map((opt, idx) => (
+                            <span key={opt.key}>{idx > 0 && " · "}{counts[opt.key] ?? 0} {opt.label.toLowerCase()}</span>
+                          ))}
                         </span>
                         <span className={`font-semibold px-2 py-0.5 rounded border ${getScoreColor(pct)}`}>
                           {pct}%
@@ -314,13 +323,25 @@ export default async function AuditDetailPage({
                       <div key={item.id} className="border rounded-lg p-3">
                         <div className="flex items-start gap-3">
                           {response ? (
-                            <Badge
-                              variant="status"
-                              style={AUDIT_RATING_STYLES[response.rating]}
-                              className="shrink-0 mt-0.5 text-xs"
-                            >
-                              {AUDIT_RATING_LABELS[response.rating]}
-                            </Badge>
+                            isAdmin && isCompleted ? (
+                              <div className="shrink-0 mt-0.5">
+                                <EditableAuditRating
+                                  responseId={response.id}
+                                  auditId={audit.id}
+                                  currentRating={response.rating}
+                                  currentNotes={response.notes}
+                                  ratingOptions={ratingOptions}
+                                />
+                              </div>
+                            ) : (
+                              <Badge
+                                variant="status"
+                                style={getRatingStyle(ratingMap.get(response.rating)?.weight ?? 0)}
+                                className="shrink-0 mt-0.5 text-xs"
+                              >
+                                {ratingMap.get(response.rating)?.label ?? response.rating}
+                              </Badge>
+                            )
                           ) : (
                             <div className="size-5 rounded-full border-2 border-muted-foreground/30 shrink-0 mt-0.5" />
                           )}

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { getRatingStyle } from "@/lib/constants/audit-status";
 import {
   createTemplateSchema,
   type CreateTemplateValues,
@@ -19,17 +20,34 @@ interface TemplateFormProps {
   onCancel: () => void;
 }
 
+function slugify(text: string) {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 50) || `rating-${Date.now()}`;
+}
+
+const DEFAULT_RATING_OPTIONS = [
+  { key: "poor", label: "Poor", weight: 0 },
+  { key: "satisfactory", label: "Satisfactory", weight: 0.5 },
+  { key: "good", label: "Good", weight: 1 },
+];
+
 export function TemplateForm({ defaultValues, onSubmit, onCancel }: TemplateFormProps) {
   const {
     register,
     control,
     handleSubmit,
     formState: { errors, isSubmitting },
+    setValue,
+    watch,
   } = useForm<CreateTemplateValues>({
     resolver: zodResolver(createTemplateSchema),
     defaultValues: defaultValues ?? {
       name: "",
       description: "",
+      rating_options: DEFAULT_RATING_OPTIONS,
       categories: [{ name: "", items: [{ label: "" }] }],
     },
   });
@@ -41,11 +59,20 @@ export function TemplateForm({ defaultValues, onSubmit, onCancel }: TemplateForm
     swap: swapCategory,
   } = useFieldArray({ control, name: "categories" });
 
+  const {
+    fields: ratingFields,
+    append: appendRating,
+    remove: removeRating,
+    swap: swapRating,
+  } = useFieldArray({ control, name: "rating_options" });
+
   const [collapsedCategories, setCollapsedCategories] = useState<Record<number, boolean>>({});
 
   function toggleCollapse(index: number) {
     setCollapsedCategories((prev) => ({ ...prev, [index]: !prev[index] }));
   }
+
+  const ratingOptionsWatch = watch("rating_options");
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -68,6 +95,85 @@ export function TemplateForm({ defaultValues, onSubmit, onCancel }: TemplateForm
         {errors.description && (
           <p className="text-sm text-red-600">{errors.description.message}</p>
         )}
+      </div>
+
+      {/* Rating Options */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <Label>Rating Scale</Label>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Define the rating options and their weights (0 = worst, 1 = best).
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => appendRating({ key: `rating-${Date.now()}`, label: "", weight: 0 })}
+          >
+            <Plus className="size-4 mr-1" />
+            Add Rating
+          </Button>
+        </div>
+
+        {errors.rating_options?.root && (
+          <p className="text-sm text-red-600">{errors.rating_options.root.message}</p>
+        )}
+        {errors.rating_options?.message && (
+          <p className="text-sm text-red-600">{errors.rating_options.message}</p>
+        )}
+
+        <div className="space-y-2">
+          {ratingFields.map((field, index) => {
+            const weight = ratingOptionsWatch?.[index]?.weight ?? 0;
+            const style = getRatingStyle(weight);
+            return (
+              <div key={field.id} className="flex items-center gap-2">
+                <div
+                  className="w-2 h-8 rounded-full shrink-0"
+                  style={{ backgroundColor: style.backgroundColor as string }}
+                />
+                <Input
+                  {...register(`rating_options.${index}.label`)}
+                  placeholder="Label (e.g. Good)"
+                  className="flex-1"
+                  onBlur={(e) => {
+                    // Auto-generate key from label if key matches default pattern
+                    const currentKey = ratingOptionsWatch?.[index]?.key ?? "";
+                    if (!currentKey || currentKey.startsWith("rating-")) {
+                      setValue(`rating_options.${index}.key`, slugify(e.target.value));
+                    }
+                  }}
+                />
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="1"
+                  {...register(`rating_options.${index}.weight`, { valueAsNumber: true })}
+                  placeholder="Weight"
+                  className="w-20"
+                />
+                <input type="hidden" {...register(`rating_options.${index}.key`)} />
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <Button type="button" variant="ghost" size="icon" className="size-7" disabled={index === 0} onClick={() => swapRating(index, index - 1)}>
+                    <ArrowUp className="size-3" />
+                  </Button>
+                  <Button type="button" variant="ghost" size="icon" className="size-7" disabled={index === ratingFields.length - 1} onClick={() => swapRating(index, index + 1)}>
+                    <ArrowDown className="size-3" />
+                  </Button>
+                  <Button type="button" variant="ghost" size="icon" className="size-7" disabled={ratingFields.length <= 2} onClick={() => removeRating(index)}>
+                    <Trash2 className="size-3" />
+                  </Button>
+                </div>
+                {errors.rating_options?.[index]?.label && (
+                  <p className="text-xs text-red-600">{errors.rating_options[index].label.message}</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="space-y-3">

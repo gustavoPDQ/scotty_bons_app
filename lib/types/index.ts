@@ -108,6 +108,7 @@ export type AuditTemplateRow = {
   name: string;
   description: string | null;
   is_active: boolean;
+  rating_labels: RatingOption[];
   item_count: number;
   created_at: string;
   updated_at: string;
@@ -146,13 +147,23 @@ export type AuditRow = {
   updated_at: string;
 };
 
-export type AuditRating = "poor" | "satisfactory" | "good";
+export type RatingOption = {
+  key: string;
+  label: string;
+  weight: number;
+};
+
+export const DEFAULT_RATING_OPTIONS: RatingOption[] = [
+  { key: "poor", label: "Poor", weight: 0 },
+  { key: "satisfactory", label: "Satisfactory", weight: 0.5 },
+  { key: "good", label: "Good", weight: 1 },
+];
 
 export type AuditResponseRow = {
   id: string;
   audit_id: string;
   template_item_id: string;
-  rating: AuditRating;
+  rating: string;
   notes: string | null;
 };
 

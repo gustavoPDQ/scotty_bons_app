@@ -20,6 +20,7 @@ interface ExportAuditPdfButtonProps {
   storeName: string;
   templateName: string;
   conductorName: string;
+  ratingOptions?: { key: string; label: string; weight: number }[];
 }
 
 export function ExportAuditPdfButton({
@@ -28,6 +29,7 @@ export function ExportAuditPdfButton({
   storeName,
   templateName,
   conductorName,
+  ratingOptions,
 }: ExportAuditPdfButtonProps) {
   const [generating, setGenerating] = useState(false);
 
@@ -36,7 +38,7 @@ export function ExportAuditPdfButton({
     try {
       const { generateAuditPdf } = await import("@/lib/pdf/generate-audit-pdf");
       const { downloadPdf } = await import("@/lib/pdf/download-pdf");
-      const blob = generateAuditPdf(audit, categories, storeName, templateName, conductorName);
+      const blob = generateAuditPdf(audit, categories, storeName, templateName, conductorName, ratingOptions as any);
       const date = new Date().toISOString().slice(0, 10);
       const safeName = storeName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
       downloadPdf(blob, `audit-${safeName}-${date}.pdf`);

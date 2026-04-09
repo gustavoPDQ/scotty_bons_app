@@ -4,7 +4,8 @@ import { escapeHtml } from "./escape-html";
 import { getScoreLabel } from "@/lib/constants/audit-status";
 import { createClient } from "@/lib/supabase/server";
 import { generateAuditPdfBuffer } from "@/lib/pdf/generate-pdf-buffer";
-import type { AuditRating } from "@/lib/types";
+import type { RatingOption } from "@/lib/types";
+import { DEFAULT_RATING_OPTIONS } from "@/lib/types";
 
 const appUrl = () => process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -17,6 +18,7 @@ export async function notifyAuditCompleted({
   conductorName,
   auditData,
   categories,
+  ratingOptions,
 }: {
   auditId: string;
   storeId: string;
@@ -25,7 +27,8 @@ export async function notifyAuditCompleted({
   score: number;
   conductorName: string;
   auditData?: { score: number | null; conducted_at: string | null; notes: string | null };
-  categories?: { name: string; items: { label: string; rating: AuditRating | null; notes: string | null }[] }[];
+  categories?: { name: string; items: { label: string; rating: string | null; notes: string | null }[] }[];
+  ratingOptions?: RatingOption[];
 }): Promise<void> {
   const supabase = await createClient();
   const isCritical = score < 60;
@@ -72,7 +75,7 @@ export async function notifyAuditCompleted({
   const attachments: EmailAttachment[] = [];
   if (auditData && categories) {
     try {
-      const pdfBuffer = generateAuditPdfBuffer(auditData, categories, storeName, templateName, conductorName);
+      const pdfBuffer = generateAuditPdfBuffer(auditData, categories, storeName, templateName, conductorName, ratingOptions ?? DEFAULT_RATING_OPTIONS);
       attachments.push({ content: pdfBuffer, filename: `audit-${storeName.replace(/\s+/g, "-").toLowerCase()}.pdf` });
     } catch (e) {
       console.error("[email] Failed to generate audit PDF attachment:", e);
