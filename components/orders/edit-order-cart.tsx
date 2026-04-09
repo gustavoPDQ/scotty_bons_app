@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useReducer, useTransition } from "react";
+import { useMemo, useReducer, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Minus, Package, Plus, Trash2 } from "lucide-react";
+import { Minus, Package, Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -108,16 +108,24 @@ export function EditOrderCart({ orderId, categories, products, currentItems }: E
   }, [currentItems, modifierLookup]);
 
   const [cart, dispatch] = useReducer(cartReducer, { items: initialItems });
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Filter products by search query
+  const filteredProducts = useMemo(() => {
+    if (!searchQuery.trim()) return products;
+    const q = searchQuery.toLowerCase();
+    return products.filter((p) => p.name.toLowerCase().includes(q));
+  }, [products, searchQuery]);
 
   const productsByCategory = useMemo(() => {
     const map = new Map<string, ProductRow[]>();
-    for (const product of products) {
+    for (const product of filteredProducts) {
       const existing = map.get(product.category_id) ?? [];
       existing.push(product);
       map.set(product.category_id, existing);
     }
     return map;
-  }, [products]);
+  }, [filteredProducts]);
 
   const categoriesWithProducts = useMemo(
     () => categories.filter((cat) => (productsByCategory.get(cat.id)?.length ?? 0) > 0),
@@ -255,6 +263,39 @@ export function EditOrderCart({ orderId, categories, products, currentItems }: E
           )}
         </CardContent>
       </Card>
+
+      {/* Search bar */}
+      <div className="relative">
+        <Input
+          type="search"
+          placeholder="Search products..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          leftIcon={<Search className="size-4" />}
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery("")}
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-4" />
+          </button>
+        )}
+      </div>
+
+      {/* No results */}
+      {filteredProducts.length === 0 && searchQuery.trim() && (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <Search className="mx-auto size-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No products found</h3>
+            <p className="text-sm text-muted-foreground">
+              No products match &ldquo;{searchQuery}&rdquo;. Try a different search.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Product catalog — one row per modifier */}
       {categoriesWithProducts.map((cat) => (

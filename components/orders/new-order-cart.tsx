@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useReducer, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Minus, Package, Plus, ShoppingCart, Trash2 } from "lucide-react";
+import { Minus, Package, Plus, Search, ShoppingCart, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -105,19 +105,27 @@ export function NewOrderCart({ categories, products, storeId, stores }: NewOrder
   const [activeCategory, setActiveCategory] = useState<string>("");
   const [selectedStoreId, setSelectedStoreId] = useState<string>(storeId ?? "");
   const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const isAdmin = !!stores;
   const observerRef = useRef<IntersectionObserver | null>(null);
+
+  // Filter products by search query
+  const filteredProducts = useMemo(() => {
+    if (!searchQuery.trim()) return products;
+    const q = searchQuery.toLowerCase();
+    return products.filter((p) => p.name.toLowerCase().includes(q));
+  }, [products, searchQuery]);
 
   // Group products by category
   const productsByCategory = useMemo(() => {
     const map = new Map<string, ProductRow[]>();
-    for (const product of products) {
+    for (const product of filteredProducts) {
       const existing = map.get(product.category_id) ?? [];
       existing.push(product);
       map.set(product.category_id, existing);
     }
     return map;
-  }, [products]);
+  }, [filteredProducts]);
 
   const categoriesWithProducts = useMemo(
     () => categories.filter((cat) => (productsByCategory.get(cat.id)?.length ?? 0) > 0),
@@ -379,7 +387,41 @@ export function NewOrderCart({ categories, products, storeId, stores }: NewOrder
 
   return (
     <div className="space-y-4 pb-24">
+      {/* Search bar */}
+      <div className="relative">
+        <Input
+          type="search"
+          placeholder="Search products..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          leftIcon={<Search className="size-4" />}
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery("")}
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-4" />
+          </button>
+        )}
+      </div>
+
+      {/* No results */}
+      {filteredProducts.length === 0 && searchQuery.trim() && (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <Search className="mx-auto size-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No products found</h3>
+            <p className="text-sm text-muted-foreground">
+              No products match &ldquo;{searchQuery}&rdquo;. Try a different search.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Sticky category navigation */}
+      {categoriesWithProducts.length > 0 && (
       <nav
         aria-label="Category navigation"
         className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b"
@@ -402,6 +444,7 @@ export function NewOrderCart({ categories, products, storeId, stores }: NewOrder
           ))}
         </div>
       </nav>
+      )}
 
       {/* Category sections — one row per modifier */}
       {categoriesWithProducts.map((cat) => (

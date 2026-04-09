@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { Package } from "lucide-react";
+import { Package, Search, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn, formatPrice } from "@/lib/utils";
 import type { CategoryRow, ProductRow } from "@/lib/types";
@@ -14,18 +16,26 @@ interface CatalogBrowserProps {
 
 export function CatalogBrowser({ categories, products }: CatalogBrowserProps) {
   const [activeCategory, setActiveCategory] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState("");
   const observerRef = useRef<IntersectionObserver | null>(null);
+
+  // Filter products by search query
+  const filteredProducts = useMemo(() => {
+    if (!searchQuery.trim()) return products;
+    const q = searchQuery.toLowerCase();
+    return products.filter((p) => p.name.toLowerCase().includes(q));
+  }, [products, searchQuery]);
 
   // Group products by category_id
   const productsByCategory = useMemo(() => {
     const map = new Map<string, ProductRow[]>();
-    for (const product of products) {
+    for (const product of filteredProducts) {
       const existing = map.get(product.category_id) ?? [];
       existing.push(product);
       map.set(product.category_id, existing);
     }
     return map;
-  }, [products]);
+  }, [filteredProducts]);
 
   // Only show categories that have products
   const categoriesWithProducts = useMemo(
@@ -82,7 +92,41 @@ export function CatalogBrowser({ categories, products }: CatalogBrowserProps) {
 
   return (
     <div className="space-y-4">
+      {/* Search bar */}
+      <div className="relative">
+        <Input
+          type="search"
+          placeholder="Search products..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          leftIcon={<Search className="size-4" />}
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery("")}
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-4" />
+          </button>
+        )}
+      </div>
+
+      {/* No results */}
+      {filteredProducts.length === 0 && searchQuery.trim() && (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <Search className="mx-auto size-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No products found</h3>
+            <p className="text-sm text-muted-foreground">
+              No products match &ldquo;{searchQuery}&rdquo;. Try a different search.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Sticky category navigation */}
+      {categoriesWithProducts.length > 0 && (
       <nav aria-label="Category navigation" className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b">
         <div className="flex gap-2 overflow-x-auto py-3 px-1">
           {categoriesWithProducts.map((cat) => (
@@ -102,6 +146,7 @@ export function CatalogBrowser({ categories, products }: CatalogBrowserProps) {
           ))}
         </div>
       </nav>
+      )}
 
       {/* Category sections */}
       {categoriesWithProducts.map((cat) => (

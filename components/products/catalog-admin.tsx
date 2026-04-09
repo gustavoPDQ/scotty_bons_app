@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
@@ -14,8 +14,11 @@ import {
   Package,
   Pencil,
   Plus,
+  Search,
   Trash2,
+  X,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -67,6 +70,7 @@ interface CatalogAdminProps {
 export function CatalogAdmin({ products, categories }: CatalogAdminProps) {
   const router = useRouter();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Dialogs
   const [isCreateCategoryOpen, setIsCreateCategoryOpen] = useState(false);
@@ -94,12 +98,37 @@ export function CatalogAdmin({ products, categories }: CatalogAdminProps) {
     setExpanded(new Set(categories.map((c) => c.id)));
   const collapseAll = () => setExpanded(new Set());
 
-  // Group products by category
+  const isSearching = searchQuery.trim().length > 0;
+
+  // Filter products when searching
+  const filteredProducts = useMemo(() => {
+    if (!isSearching) return products;
+    const q = searchQuery.toLowerCase();
+    return products.filter((p) => p.name.toLowerCase().includes(q));
+  }, [products, searchQuery, isSearching]);
+
+  // Group filtered products by category
   const productsByCategory: Record<string, ProductRow[]> = {};
   for (const cat of categories) productsByCategory[cat.id] = [];
-  for (const p of products) {
+  for (const p of filteredProducts) {
     if (productsByCategory[p.category_id]) {
       productsByCategory[p.category_id].push(p);
+    }
+  }
+
+  // Only show categories that have matching products when searching
+  const visibleCategories = isSearching
+    ? categories.filter((c) => (productsByCategory[c.id]?.length ?? 0) > 0)
+    : categories;
+
+  // Auto-expand matching categories when searching
+  const prevSearchRef = useRef(searchQuery);
+  if (prevSearchRef.current !== searchQuery) {
+    prevSearchRef.current = searchQuery;
+    if (isSearching && visibleCategories.length > 0) {
+      setExpanded(new Set(visibleCategories.map((c) => c.id)));
+    } else if (!isSearching) {
+      setExpanded(new Set());
     }
   }
 
@@ -169,10 +198,10 @@ export function CatalogAdmin({ products, categories }: CatalogAdminProps) {
         <CardHeader className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="space-y-1">
-              <CardTitle>Products</CardTitle>
               <CardDescription>
                 {categories.length} categor{categories.length !== 1 ? "ies" : "y"},{" "}
                 {totalProducts} product{totalProducts !== 1 ? "s" : ""}
+                {isSearching && ` · ${filteredProducts.length} matching`}
               </CardDescription>
             </div>
             <Button variant="ghost" size="sm" onClick={expanded.size > 0 ? collapseAll : expandAll}>
@@ -229,17 +258,40 @@ export function CatalogAdmin({ products, categories }: CatalogAdminProps) {
               </DialogContent>
             </Dialog>
           </div>
+          <div className="relative">
+            <Input
+              type="search"
+              placeholder="Search products..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              leftIcon={<Search className="size-4" />}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {categories.length === 0 ? (
             <div className="rounded-md border p-8 text-center text-sm text-muted-foreground">
               No categories yet. Create the first one to start building the catalog.
             </div>
+          ) : isSearching && visibleCategories.length === 0 ? (
+            <div className="rounded-md border p-8 text-center text-sm text-muted-foreground">
+              No categories match &ldquo;{searchQuery}&rdquo;.
+            </div>
           ) : (
             <div className="rounded-md border divide-y">
-              {categories.map((category, catIndex) => {
+              {visibleCategories.map((category) => {
                 const isOpen = expanded.has(category.id);
                 const catProducts = productsByCategory[category.id] ?? [];
+                const catIndex = categories.indexOf(category);
                 return (
                   <div key={category.id}>
                     {/* Category row */}
