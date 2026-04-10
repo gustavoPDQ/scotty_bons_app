@@ -211,6 +211,47 @@ export async function reactivateUser(
   return { data: null, error: null };
 }
 
+export async function deleteUser(
+  userId: string
+): Promise<ActionResult<null>> {
+  const idParsed = userIdSchema.safeParse(userId);
+  if (!idParsed.success) return { data: null, error: "Invalid user ID." };
+
+  const caller = await verifyAdmin();
+  if (!caller) return { data: null, error: "Unauthorized." };
+  if (caller.id === userId) {
+    return { data: null, error: "You cannot delete your own account." };
+  }
+
+  const adminClient = createAdminClient();
+
+  // Check if user has submitted orders
+  const { count: orderCount } = await adminClient
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("submitted_by", userId);
+
+  if (orderCount && orderCount > 0) {
+    return { data: null, error: "Cannot delete a user that has submitted orders. Deactivate instead." };
+  }
+
+  // Check if user has conducted audits
+  const { count: auditCount } = await adminClient
+    .from("audits")
+    .select("id", { count: "exact", head: true })
+    .eq("conducted_by", userId);
+
+  if (auditCount && auditCount > 0) {
+    return { data: null, error: "Cannot delete a user that has conducted audits. Deactivate instead." };
+  }
+
+  // Delete auth user — profile is CASCADE deleted automatically
+  const { error } = await adminClient.auth.admin.deleteUser(userId);
+  if (error) return { data: null, error: "Failed to delete user. Please try again." };
+
+  return { data: null, error: null };
+}
+
 export async function resetUserPassword(
   userId: string,
   newPassword: string

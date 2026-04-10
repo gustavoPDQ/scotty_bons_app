@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { MoreHorizontal, Pencil, UserX, UserCheck } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2, UserX, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -20,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { deactivateUser, reactivateUser } from "@/app/(dashboard)/users/actions";
+import { deactivateUser, reactivateUser, deleteUser } from "@/app/(dashboard)/users/actions";
 import type { UserRow } from "@/lib/types";
 
 interface UserInlineActionsProps {
@@ -32,6 +32,7 @@ interface UserInlineActionsProps {
 
 export function UserInlineActions({ user, isSelf, onEdit, onActionComplete }: UserInlineActionsProps) {
   const [showDeactivate, setShowDeactivate] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const handleDeactivate = () => {
@@ -55,6 +56,19 @@ export function UserInlineActions({ user, isSelf, onEdit, onActionComplete }: Us
         return;
       }
       toast.success("User reactivated.");
+      onActionComplete();
+    });
+  };
+
+  const handleDelete = () => {
+    startTransition(async () => {
+      const result = await deleteUser(user.id);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("User deleted.");
+      setShowDelete(false);
       onActionComplete();
     });
   };
@@ -88,6 +102,15 @@ export function UserInlineActions({ user, isSelf, onEdit, onActionComplete }: Us
               {isPending ? "Reactivating..." : "Reactivate"}
             </DropdownMenuItem>
           )}
+          {!isSelf && (
+            <DropdownMenuItem
+              onClick={() => setShowDelete(true)}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="size-4 mr-2" />
+              Delete
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -103,6 +126,28 @@ export function UserInlineActions({ user, isSelf, onEdit, onActionComplete }: Us
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeactivate} disabled={isPending}>
               {isPending ? "Deactivating..." : "Deactivate"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showDelete} onOpenChange={setShowDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete User</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to permanently delete <strong>{user.name}</strong>?
+              This action cannot be undone. Users with orders or audits cannot be deleted — deactivate them instead.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isPending ? "Deleting..." : "Delete permanently"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -31,30 +31,31 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  // Try getClaims() first — reads the JWT locally with NO network roundtrip.
-  // Only fall back to getUser() (network call) if the token looks expired,
-  // since getUser() can refresh the session via the refresh token.
-  const { data: claims, error: claimsError } = await supabase.auth.getClaims();
+  const isAuthRoute =
+    request.nextUrl.pathname.startsWith("/login") ||
+    request.nextUrl.pathname.startsWith("/auth") ||
+    request.nextUrl.pathname.startsWith("/forgot-password") ||
+    request.nextUrl.pathname.startsWith("/update-password");
 
-  let isAuthenticated = !!claims && !claimsError;
+  // Always call getUser() — it validates the token server-side and catches
+  // banned users immediately (getClaims only reads the local JWT which won't
+  // reflect a ban until the token expires).
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!isAuthenticated) {
-    // Token might be expired but refresh token could still be valid.
-    // Fall back to getUser() which will attempt a token refresh.
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    isAuthenticated = !!user;
+  const isAuthenticated = !!user;
+
+  // Check if user is banned (deactivated)
+  if (user?.banned_until && new Date(user.banned_until) > new Date()) {
+    // Force sign out and redirect to login
+    await supabase.auth.signOut();
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
   }
 
-  if (
-    !isAuthenticated &&
-    !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/auth") &&
-    !request.nextUrl.pathname.startsWith("/forgot-password") &&
-    !request.nextUrl.pathname.startsWith("/update-password")
-  ) {
-    // no valid session, redirect to login
+  if (!isAuthenticated && !isAuthRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
