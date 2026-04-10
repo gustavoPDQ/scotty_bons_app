@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import type { ActionResult, CategoryRow, ProductRow } from "@/lib/types";
+import type { ActionResult, CategoryRow, ProductImageRow } from "@/lib/types";
 import { z } from "zod";
 import {
   createCategorySchema,
@@ -29,6 +29,25 @@ async function verifyAdmin() {
     .single();
 
   return profile?.role === "admin" ? supabase : null;
+}
+
+/** Verifies the current session belongs to an admin or commissary. Returns the supabase client or null. */
+async function verifyAdminOrCommissary() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
+
+  return profile?.role === "admin" || profile?.role === "commissary"
+    ? supabase
+    : null;
 }
 
 const idSchema = z.string().uuid("Invalid ID.");
@@ -301,16 +320,27 @@ export async function deleteProduct(
 
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2 MB
+const MAX_IMAGES_PER_PRODUCT = 5;
 
 export async function uploadProductImage(
   productId: string,
   formData: FormData
-): Promise<ActionResult<string | null>> {
+): Promise<ActionResult<ProductImageRow | null>> {
   const idParsed = idSchema.safeParse(productId);
   if (!idParsed.success) return { data: null, error: "Invalid product ID." };
 
   const supabase = await verifyAdmin();
   if (!supabase) return { data: null, error: "Unauthorized." };
+
+  // Check current image count
+  const { count } = await supabase
+    .from("product_images")
+    .select("id", { count: "exact", head: true })
+    .eq("product_id", productId);
+
+  if (count !== null && count >= MAX_IMAGES_PER_PRODUCT) {
+    return { data: null, error: `Maximum of ${MAX_IMAGES_PER_PRODUCT} images per product.` };
+  }
 
   const file = formData.get("file") as File | null;
   if (!file) return { data: null, error: "No file provided." };
@@ -323,65 +353,82 @@ export async function uploadProductImage(
   }
 
   const ext = file.name.split(".").pop() ?? "jpg";
-  const filePath = `${productId}.${ext}`;
+  const fileId = crypto.randomUUID();
+  const filePath = `${productId}/${fileId}.${ext}`;
 
-  // Upload (upsert to replace existing image)
   const { error: uploadError } = await supabase.storage
     .from("product-images")
-    .upload(filePath, file, { upsert: true, contentType: file.type });
+    .upload(filePath, file, { contentType: file.type });
 
   if (uploadError) {
     return { data: null, error: "Failed to upload image. Please try again." };
   }
 
-  // Get the public URL
   const { data: urlData } = supabase.storage
     .from("product-images")
     .getPublicUrl(filePath);
 
-  const imageUrl = urlData.publicUrl;
+  // Get next sort_order
+  const { data: maxRow } = await supabase
+    .from("product_images")
+    .select("sort_order")
+    .eq("product_id", productId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .single();
+  const nextSort = (maxRow?.sort_order ?? -1) + 1;
 
-  // Update the product record
-  const { error: updateError } = await supabase
-    .from("products")
-    .update({ image_url: imageUrl })
-    .eq("id", productId);
+  const { data: imageRow, error: insertError } = await supabase
+    .from("product_images")
+    .insert({
+      product_id: productId,
+      url: urlData.publicUrl,
+      sort_order: nextSort,
+    })
+    .select("id, url, sort_order")
+    .single();
 
-  if (updateError) {
+  if (insertError) {
+    // Cleanup uploaded file
+    await supabase.storage.from("product-images").remove([filePath]);
     return { data: null, error: "Image uploaded but failed to save. Please try again." };
   }
 
-  return { data: imageUrl, error: null };
+  return { data: imageRow as ProductImageRow, error: null };
 }
 
 export async function removeProductImage(
-  productId: string
+  imageId: string
 ): Promise<ActionResult<null>> {
-  const idParsed = idSchema.safeParse(productId);
-  if (!idParsed.success) return { data: null, error: "Invalid product ID." };
+  const idParsed = idSchema.safeParse(imageId);
+  if (!idParsed.success) return { data: null, error: "Invalid image ID." };
 
   const supabase = await verifyAdmin();
   if (!supabase) return { data: null, error: "Unauthorized." };
 
-  // Get current image_url to find the file path
-  const { data: product } = await supabase
-    .from("products")
-    .select("image_url")
-    .eq("id", productId)
+  const { data: image } = await supabase
+    .from("product_images")
+    .select("id, url")
+    .eq("id", imageId)
     .single();
 
-  if (product?.image_url) {
-    const url = new URL(product.image_url);
+  if (!image) return { data: null, error: "Image not found." };
+
+  // Delete from storage
+  try {
+    const url = new URL(image.url);
     const pathParts = url.pathname.split("/product-images/");
     if (pathParts[1]) {
-      await supabase.storage.from("product-images").remove([pathParts[1]]);
+      await supabase.storage.from("product-images").remove([decodeURIComponent(pathParts[1])]);
     }
+  } catch {
+    // Storage cleanup is best-effort
   }
 
   const { error } = await supabase
-    .from("products")
-    .update({ image_url: null })
-    .eq("id", productId);
+    .from("product_images")
+    .delete()
+    .eq("id", imageId);
 
   if (error) return { data: null, error: "Failed to remove image." };
   return { data: null, error: null };
@@ -442,6 +489,36 @@ export async function reorderProducts(
   if (failed?.error) {
     return { data: null, error: "Failed to reorder products. Please try again." };
   }
+
+  return { data: null, error: null };
+}
+
+// ── Stock toggle ──────────────────────────────────────────────────────────────
+
+export async function toggleProductStock(
+  productId: string
+): Promise<ActionResult<null>> {
+  const idParsed = idSchema.safeParse(productId);
+  if (!idParsed.success) return { data: null, error: "Invalid product ID." };
+
+  const supabase = await verifyAdminOrCommissary();
+  if (!supabase) return { data: null, error: "Unauthorized." };
+
+  const { data: product } = await supabase
+    .from("products")
+    .select("in_stock")
+    .eq("id", productId)
+    .eq("active", true)
+    .single();
+
+  if (!product) return { data: null, error: "Product not found." };
+
+  const { error } = await supabase
+    .from("products")
+    .update({ in_stock: !product.in_stock })
+    .eq("id", productId);
+
+  if (error) return { data: null, error: "Failed to update stock status." };
 
   return { data: null, error: null };
 }

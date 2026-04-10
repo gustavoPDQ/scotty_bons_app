@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { ImagePlus, Plus, Trash2 } from "lucide-react";
+import { ImagePlus, Plus, Trash2, X } from "lucide-react";
 import {
   Form,
   FormControl,
@@ -30,6 +30,14 @@ import {
 } from "@/lib/validations/products";
 import type { CategoryRow, ProductRow } from "@/lib/types";
 
+type ImageEntry = {
+  id?: string;
+  url: string;
+  file?: File;
+};
+
+const MAX_IMAGES = 5;
+
 interface ProductFormProps {
   categories: CategoryRow[];
   product?: ProductRow;
@@ -51,9 +59,11 @@ export function ProductForm({ categories, product, defaultCategoryId, onSuccess 
       return map;
     },
   );
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(product?.image_url ?? null);
-  const [removeImage, setRemoveImage] = useState(false);
+  const [images, setImages] = useState<ImageEntry[]>(
+    () => product?.images?.map((img) => ({ id: img.id, url: img.url })) ?? []
+  );
+  const [removedImageIds, setRemovedImageIds] = useState<string[]>([]);
+  const [newFiles, setNewFiles] = useState<ImageEntry[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isEditing = !!product;
 
@@ -76,6 +86,8 @@ export function ProductForm({ categories, product, defaultCategoryId, onSuccess 
     control: form.control,
     name: "modifiers",
   });
+
+  const totalImages = images.length + newFiles.length;
 
   const compressImage = (file: File, maxWidth = 1200, quality = 0.8): Promise<File> =>
     new Promise((resolve) => {
@@ -105,19 +117,30 @@ export function ProductForm({ categories, product, defaultCategoryId, onSuccess 
     });
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const compressed = await compressImage(file);
-    setImageFile(compressed);
-    setRemoveImage(false);
-    setImagePreview(URL.createObjectURL(compressed));
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    const remaining = MAX_IMAGES - totalImages;
+    const toAdd = files.slice(0, remaining);
+    const compressed = await Promise.all(toAdd.map((f) => compressImage(f)));
+    const entries: ImageEntry[] = compressed.map((f) => ({
+      url: URL.createObjectURL(f),
+      file: f,
+    }));
+    setNewFiles((prev) => [...prev, ...entries]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleRemoveImage = () => {
-    setImageFile(null);
-    setImagePreview(null);
-    setRemoveImage(true);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+  const handleRemoveExisting = (imageId: string) => {
+    setImages((prev) => prev.filter((img) => img.id !== imageId));
+    setRemovedImageIds((prev) => [...prev, imageId]);
+  };
+
+  const handleRemoveNew = (index: number) => {
+    setNewFiles((prev) => {
+      const entry = prev[index];
+      if (entry?.url.startsWith("blob:")) URL.revokeObjectURL(entry.url);
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const onSubmit = (values: CreateProductValues) => {
@@ -134,23 +157,29 @@ export function ProductForm({ categories, product, defaultCategoryId, onSuccess 
 
         const productId = isEditing ? product.id : (result.data as { id: string })?.id;
         if (productId) {
-          if (imageFile) {
-            const fd = new FormData();
-            fd.append("file", imageFile);
-            const imgResult = await uploadProductImage(productId, fd);
-            if (imgResult.error) {
-              toast.warning(imgResult.error);
+          // Remove images marked for deletion
+          for (const imageId of removedImageIds) {
+            await removeProductImage(imageId);
+          }
+
+          // Upload new images
+          for (const entry of newFiles) {
+            if (entry.file) {
+              const fd = new FormData();
+              fd.append("file", entry.file);
+              const imgResult = await uploadProductImage(productId, fd);
+              if (imgResult.error) {
+                toast.warning(imgResult.error);
+              }
             }
-          } else if (removeImage && isEditing) {
-            await removeProductImage(productId);
           }
         }
 
         form.reset();
         setPriceDisplays({});
-        setImageFile(null);
-        setImagePreview(null);
-        setRemoveImage(false);
+        setImages([]);
+        setNewFiles([]);
+        setRemovedImageIds([]);
         toast.success(isEditing ? "Product updated." : "Product created.");
         onSuccess();
       } catch (err) {
@@ -315,43 +344,69 @@ export function ProductForm({ categories, product, defaultCategoryId, onSuccess 
         </div>
 
         <div className="space-y-2">
-          <FormLabel>Product Image</FormLabel>
-          {imagePreview ? (
-            <div className="relative w-full aspect-[3/1] max-h-40 rounded-md overflow-hidden border bg-muted">
-              <Image
-                src={imagePreview}
-                alt="Product preview"
-                fill
-                className="object-contain"
-                unoptimized={imagePreview.startsWith("blob:")}
-              />
+          <FormLabel>Product Images</FormLabel>
+          <div className="flex flex-wrap gap-2">
+            {images.map((img) => (
+              <div
+                key={img.id}
+                className="relative size-20 rounded-md overflow-hidden border bg-muted shrink-0"
+              >
+                <Image
+                  src={img.url}
+                  alt="Product"
+                  fill
+                  className="object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleRemoveExisting(img.id!)}
+                  className="absolute top-1 right-1 rounded-full bg-destructive p-1 text-destructive-foreground shadow-sm hover:bg-destructive/90"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
+            {newFiles.map((entry, i) => (
+              <div
+                key={`new-${i}`}
+                className="relative size-20 rounded-md overflow-hidden border bg-muted shrink-0"
+              >
+                <Image
+                  src={entry.url}
+                  alt="New image"
+                  fill
+                  className="object-cover"
+                  unoptimized
+                />
+                <button
+                  type="button"
+                  onClick={() => handleRemoveNew(i)}
+                  className="absolute top-1 right-1 rounded-full bg-destructive p-1 text-destructive-foreground shadow-sm hover:bg-destructive/90"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
+            {totalImages < MAX_IMAGES && (
               <button
                 type="button"
-                onClick={handleRemoveImage}
-                className="absolute top-2 right-2 rounded-full bg-destructive p-1.5 text-destructive-foreground shadow-sm hover:bg-destructive/90"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex size-20 items-center justify-center rounded-md border border-dashed text-muted-foreground hover:border-primary hover:text-foreground transition-colors shrink-0"
               >
-                <Trash2 className="size-3.5" />
+                <ImagePlus className="size-5" />
               </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed p-6 text-sm text-muted-foreground hover:border-primary hover:text-foreground transition-colors"
-            >
-              <ImagePlus className="size-5" />
-              Click to upload an image
-            </button>
-          )}
+            )}
+          </div>
           <input
             ref={fileInputRef}
             type="file"
             accept="image/jpeg,image/png,image/webp"
+            multiple
             className="hidden"
             onChange={handleFileChange}
           />
           <p className="text-xs text-muted-foreground">
-            JPEG, PNG or WebP. Max 2 MB.
+            {totalImages} / {MAX_IMAGES} images. JPEG, PNG or WebP. Max 2 MB each.
           </p>
         </div>
 

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { MoreHorizontal, Package, Pencil, Plus, Trash2 } from "lucide-react";
+import { ProductImageLightbox, type LightboxState } from "@/components/products/product-image-lightbox";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -53,6 +54,7 @@ export function ProductsClient({ products, categories, isAdmin }: ProductsClient
   const [editingProduct, setEditingProduct] = useState<ProductRow | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<ProductRow | null>(null);
   const [isDeleting, startDeleteTransition] = useTransition();
+  const [lightbox, setLightbox] = useState<LightboxState>(null);
 
   const refresh = () => router.refresh();
 
@@ -116,18 +118,29 @@ export function ProductsClient({ products, categories, isAdmin }: ProductsClient
                   className="flex items-center justify-between px-4 py-3"
                 >
                   <div className="flex items-center gap-3">
-                    {product.image_url ? (
-                      <div className="relative size-10 shrink-0 rounded overflow-hidden bg-muted">
+                    {product.images?.[0] ? (
+                      <button
+                        type="button"
+                        onClick={() => setLightbox({ images: product.images, name: product.name, index: 0 })}
+                        className="relative size-[60px] shrink-0"
+                      >
                         <Image
-                          src={product.image_url}
+                          src={product.images[0].url}
                           alt={product.name}
                           fill
-                          className="object-cover"
-                          sizes="40px"
+                          className="object-cover rounded"
+                          sizes="60px"
                         />
-                      </div>
+                        {product.images.length > 1 && (
+                          <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
+                            {product.images.length}
+                          </span>
+                        )}
+                      </button>
                     ) : (
-                      <Package className="size-4 text-muted-foreground" />
+                      <div className="flex size-[60px] shrink-0 items-center justify-center rounded bg-muted">
+                        <Package className="size-5 text-muted-foreground" />
+                      </div>
                     )}
                     <div>
                       <span className="text-sm font-medium">{product.name}</span>
@@ -208,6 +221,8 @@ export function ProductsClient({ products, categories, isAdmin }: ProductsClient
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ProductImageLightbox state={lightbox} onClose={() => setLightbox(null)} onChange={setLightbox} />
     </div>
   );
 }

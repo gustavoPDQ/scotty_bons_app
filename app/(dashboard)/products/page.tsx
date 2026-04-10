@@ -4,7 +4,7 @@ import { getUser, getProfile } from "@/lib/supabase/auth-cache";
 import { createPageTimer } from "@/lib/perf";
 import { CatalogAdmin } from "@/components/products/catalog-admin";
 import { CatalogBrowser } from "@/components/products/catalog-browser";
-import type { CategoryRow, ProductRow, ProductModifierRow } from "@/lib/types";
+import type { CategoryRow, ProductRow, ProductModifierRow, ProductImageRow } from "@/lib/types";
 
 export default async function ProductsPage() {
   const timer = createPageTimer("Products");
@@ -13,9 +13,9 @@ export default async function ProductsPage() {
   if (!user) redirect("/login");
 
   const profile = await timer.time("profiles.select(cached)", () => getProfile());
-  if (profile?.role === "commissary") redirect("/orders");
 
   const isAdmin = profile?.role === "admin";
+  const isCommissary = profile?.role === "commissary";
   const supabase = await createClient();
 
   const [categoriesRes, productsRes] = await timer.time("parallel-queries", () =>
@@ -26,7 +26,7 @@ export default async function ProductsPage() {
         .order("sort_order"),
       supabase
         .from("products")
-        .select("id, name, category_id, image_url, sort_order, product_modifiers(id, label, price, sort_order)")
+        .select("id, name, category_id, sort_order, in_stock, product_modifiers(id, label, price, sort_order), product_images(id, url, sort_order)")
         .eq("active", true)
         .order("sort_order"),
     ])
@@ -43,8 +43,10 @@ export default async function ProductsPage() {
     id: p.id,
     name: p.name,
     category_id: p.category_id,
-    image_url: p.image_url,
+    images: ((p.product_images ?? []) as ProductImageRow[])
+      .sort((a, b) => a.sort_order - b.sort_order),
     sort_order: p.sort_order,
+    in_stock: p.in_stock ?? true,
     modifiers: ((p.product_modifiers ?? []) as ProductModifierRow[])
       .map((m) => ({
         id: m.id,
@@ -96,6 +98,7 @@ export default async function ProductsPage() {
         <CatalogBrowser
           categories={categories}
           products={productsWithCategory}
+          userRole={isCommissary ? "commissary" : "store"}
         />
       )}
     </div>

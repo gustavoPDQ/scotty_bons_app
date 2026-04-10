@@ -39,13 +39,20 @@ export type ProductModifierRow = {
   sort_order: number;
 };
 
+export type ProductImageRow = {
+  id: string;
+  url: string;
+  sort_order: number;
+};
+
 export type ProductRow = {
   id: string;
   name: string;
   category_id: string;
   category_name?: string;
-  image_url?: string | null;
+  images: ProductImageRow[];
   sort_order: number;
+  in_stock: boolean;
   modifiers: ProductModifierRow[];
 };
 
@@ -129,6 +136,7 @@ export type AuditTemplateItemRow = {
   label: string;
   description: string | null;
   sort_order: number;
+  rating_labels: RatingOption[];
   created_at: string;
 };
 

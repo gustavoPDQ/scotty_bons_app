@@ -165,6 +165,38 @@ export type Database = {
         }
         Relationships: []
       }
+      product_images: {
+        Row: {
+          id: string
+          product_id: string
+          url: string
+          sort_order: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          url: string
+          sort_order?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          url?: string
+          sort_order?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_images_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           id: string
@@ -172,7 +204,6 @@ export type Database = {
           price: number
           modifier: string
           category_id: string
-          image_url: string | null
           created_at: string
           updated_at: string
         }
@@ -182,7 +213,6 @@ export type Database = {
           price: number
           modifier: string
           category_id: string
-          image_url?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -192,7 +222,6 @@ export type Database = {
           price?: number
           modifier?: string
           category_id?: string
-          image_url?: string | null
           created_at?: string
           updated_at?: string
         }

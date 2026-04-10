@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUser, getProfile } from "@/lib/supabase/auth-cache";
 import { NewOrderCart } from "@/components/orders/new-order-cart";
-import type { CategoryRow, ProductRow, ProductModifierRow } from "@/lib/types";
+import type { CategoryRow, ProductRow, ProductModifierRow, ProductImageRow } from "@/lib/types";
 
 export default async function NewOrderPage() {
   const user = await getUser();
@@ -29,7 +29,7 @@ export default async function NewOrderPage() {
       .order("sort_order"),
     supabase
       .from("products")
-      .select("id, name, category_id, image_url, sort_order, product_modifiers(id, label, price, sort_order)")
+      .select("id, name, category_id, sort_order, in_stock, product_modifiers(id, label, price, sort_order), product_images(id, url, sort_order)")
       .eq("active", true)
       .order("sort_order"),
     isAdmin
@@ -48,8 +48,10 @@ export default async function NewOrderPage() {
     id: p.id,
     name: p.name,
     category_id: p.category_id,
-    image_url: p.image_url,
+    images: ((p.product_images ?? []) as ProductImageRow[])
+      .sort((a, b) => a.sort_order - b.sort_order),
     sort_order: p.sort_order,
+    in_stock: p.in_stock ?? true,
     modifiers: ((p.product_modifiers ?? []) as ProductModifierRow[])
       .map((m) => ({
         id: m.id,

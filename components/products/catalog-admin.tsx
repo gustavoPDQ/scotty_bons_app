@@ -12,6 +12,8 @@ import {
   FolderClosed,
   MoreHorizontal,
   Package,
+  PackageCheck,
+  PackageX,
   Pencil,
   Plus,
   Search,
@@ -58,9 +60,11 @@ import {
   deleteProduct,
   reorderCategories,
   reorderProducts,
+  toggleProductStock,
 } from "@/app/(dashboard)/products/actions";
 import { formatPrice } from "@/lib/utils";
 import type { CategoryRow, ProductRow } from "@/lib/types";
+import { ProductImageLightbox, type LightboxState } from "@/components/products/product-image-lightbox";
 
 interface CatalogAdminProps {
   products: ProductRow[];
@@ -82,6 +86,8 @@ export function CatalogAdmin({ products, categories }: CatalogAdminProps) {
   const [deletingProduct, setDeletingProduct] = useState<ProductRow | null>(null);
   const [isDeleting, startDeleteTransition] = useTransition();
   const [isReordering, startReorderTransition] = useTransition();
+  const [isTogglingStock, startStockTransition] = useTransition();
+  const [lightbox, setLightbox] = useState<LightboxState>(null);
 
   const refresh = () => router.refresh();
 
@@ -163,6 +169,18 @@ export function CatalogAdmin({ products, categories }: CatalogAdminProps) {
   const openCreateProduct = (categoryId: string) => {
     setCreateProductCategoryId(categoryId);
     setIsCreateProductOpen(true);
+  };
+
+  const handleToggleStock = (productId: string) => {
+    startStockTransition(async () => {
+      const result = await toggleProductStock(productId);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Stock status updated.");
+      refresh();
+    });
   };
 
   const handleMoveCategory = (index: number, direction: "up" | "down") => {
@@ -405,23 +423,41 @@ export function CatalogAdmin({ products, categories }: CatalogAdminProps) {
                                 className="flex items-center justify-between pl-6 sm:pl-14 pr-2 sm:pr-4 py-2.5"
                               >
                                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                                  {product.image_url ? (
-                                    <div className="relative size-8 shrink-0 rounded overflow-hidden bg-muted">
+                                  {product.images?.[0] ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setLightbox({ images: product.images, name: product.name, index: 0 })}
+                                      className="relative size-12 shrink-0"
+                                    >
                                       <Image
-                                        src={product.image_url}
+                                        src={product.images[0].url}
                                         alt={product.name}
                                         fill
-                                        className="object-cover"
-                                        sizes="32px"
+                                        className="object-cover rounded"
+                                        sizes="48px"
                                       />
-                                    </div>
+                                      {product.images.length > 1 && (
+                                        <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
+                                          {product.images.length}
+                                        </span>
+                                      )}
+                                    </button>
                                   ) : (
-                                    <Package className="size-4 text-muted-foreground shrink-0" />
+                                    <div className="flex size-12 shrink-0 items-center justify-center rounded bg-muted">
+                                      <Package className="size-5 text-muted-foreground" />
+                                    </div>
                                   )}
                                   <div className="min-w-0">
-                                    <span className="text-sm font-medium truncate block">
-                                      {product.name}
-                                    </span>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-sm font-medium truncate">
+                                        {product.name}
+                                      </span>
+                                      {!product.in_stock && (
+                                        <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 shrink-0">
+                                          Out of Stock
+                                        </span>
+                                      )}
+                                    </div>
                                     <p className="text-xs text-muted-foreground truncate">
                                       {product.modifiers.map((m) =>
                                         `${m.label} ${formatPrice(m.price)}`
@@ -473,6 +509,22 @@ export function CatalogAdmin({ products, categories }: CatalogAdminProps) {
                                     >
                                       <ArrowDown className="size-4 mr-2" />
                                       Move down
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => handleToggleStock(product.id)}
+                                      disabled={isTogglingStock}
+                                    >
+                                      {product.in_stock ? (
+                                        <>
+                                          <PackageX className="size-4 mr-2" />
+                                          Mark Out of Stock
+                                        </>
+                                      ) : (
+                                        <>
+                                          <PackageCheck className="size-4 mr-2" />
+                                          Mark In Stock
+                                        </>
+                                      )}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => setEditingProduct(product)}>
                                       <Pencil className="size-4 mr-2" />
@@ -612,6 +664,8 @@ export function CatalogAdmin({ products, categories }: CatalogAdminProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ProductImageLightbox state={lightbox} onClose={() => setLightbox(null)} onChange={setLightbox} />
     </div>
   );
 }

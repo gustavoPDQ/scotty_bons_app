@@ -1,23 +1,32 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Image from "next/image";
-import { Package, Search, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Package, PackageCheck, PackageX, Search, X } from "lucide-react";
+import { ProductImageLightbox, type LightboxState } from "@/components/products/product-image-lightbox";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn, formatPrice } from "@/lib/utils";
 import type { CategoryRow, ProductRow } from "@/lib/types";
+import { toggleProductStock } from "@/app/(dashboard)/products/actions";
 
 interface CatalogBrowserProps {
   categories: CategoryRow[];
   products: ProductRow[];
+  userRole?: "commissary" | "store";
 }
 
-export function CatalogBrowser({ categories, products }: CatalogBrowserProps) {
+export function CatalogBrowser({ categories, products, userRole }: CatalogBrowserProps) {
+  const router = useRouter();
   const [activeCategory, setActiveCategory] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [isTogglingStock, startStockTransition] = useTransition();
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const canToggleStock = userRole === "commissary";
+  const [lightbox, setLightbox] = useState<LightboxState>(null);
 
   // Filter products by search query
   const filteredProducts = useMemo(() => {
@@ -73,6 +82,18 @@ export function CatalogBrowser({ categories, products }: CatalogBrowserProps) {
     if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "start" });
     }
+  };
+
+  const handleToggleStock = (productId: string) => {
+    startStockTransition(async () => {
+      const result = await toggleProductStock(productId);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Stock status updated.");
+      router.refresh();
+    });
   };
 
   // Empty state: no products at all
@@ -160,29 +181,71 @@ export function CatalogBrowser({ categories, products }: CatalogBrowserProps) {
                 {(productsByCategory.get(cat.id) ?? []).map((product) => (
                   <div
                     key={product.id}
-                    className="flex items-center gap-3 px-4 py-3"
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-3",
+                      !product.in_stock && "opacity-60"
+                    )}
                   >
-                    {product.image_url ? (
-                      <div className="relative size-10 shrink-0 rounded overflow-hidden bg-muted">
+                    {product.images?.[0] ? (
+                      <button
+                        type="button"
+                        onClick={() => setLightbox({ images: product.images, name: product.name, index: 0 })}
+                        className="relative size-[60px] shrink-0"
+                      >
                         <Image
-                          src={product.image_url}
+                          src={product.images[0].url}
                           alt={product.name}
                           fill
-                          className="object-cover"
-                          sizes="40px"
+                          className="object-cover rounded"
+                          sizes="60px"
                         />
-                      </div>
+                        {product.images.length > 1 && (
+                          <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
+                            {product.images.length}
+                          </span>
+                        )}
+                      </button>
                     ) : (
-                      <Package className="size-4 text-muted-foreground shrink-0" />
+                      <div className="flex size-[60px] shrink-0 items-center justify-center rounded bg-muted">
+                        <Package className="size-5 text-muted-foreground" />
+                      </div>
                     )}
-                    <div>
-                      <span className="text-sm font-medium">{product.name}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-medium truncate">{product.name}</span>
+                        {!product.in_stock && (
+                          <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 shrink-0">
+                            Out of Stock
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         {product.modifiers.map((m) =>
                           `${m.label} ${formatPrice(m.price)}`
                         ).join(" · ")}
                       </p>
                     </div>
+                    {canToggleStock && (
+                      <Button
+                        variant={product.in_stock ? "outline" : "default"}
+                        size="sm"
+                        className="shrink-0 text-xs"
+                        disabled={isTogglingStock}
+                        onClick={() => handleToggleStock(product.id)}
+                      >
+                        {product.in_stock ? (
+                          <>
+                            <PackageX className="size-3.5 mr-1.5" />
+                            Mark Out of Stock
+                          </>
+                        ) : (
+                          <>
+                            <PackageCheck className="size-3.5 mr-1.5" />
+                            Mark In Stock
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -190,6 +253,8 @@ export function CatalogBrowser({ categories, products }: CatalogBrowserProps) {
           </Card>
         </section>
       ))}
+
+      <ProductImageLightbox state={lightbox} onClose={() => setLightbox(null)} onChange={setLightbox} />
     </div>
   );
 }
