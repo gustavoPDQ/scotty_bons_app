@@ -1,14 +1,16 @@
 "use client";
 
-import { useMemo, useReducer, useState, useTransition } from "react";
+import { useEffect, useMemo, useReducer, useState, useTransition } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Minus, Package, Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { formatPrice } from "@/lib/utils";
+import { cn, formatPrice } from "@/lib/utils";
 import type { CategoryRow, ProductRow, ProductModifierRow } from "@/lib/types";
+import { ProductImageLightbox, type LightboxState } from "@/components/products/product-image-lightbox";
 import { editOrderItems } from "@/app/(dashboard)/orders/[order-id]/actions";
 
 type CartItem = {
@@ -109,13 +111,22 @@ export function EditOrderCart({ orderId, categories, products, currentItems }: E
 
   const [cart, dispatch] = useReducer(cartReducer, { items: initialItems });
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [selectedModifiers, setSelectedModifiers] = useState<Record<string, string>>({});
+  const [lightbox, setLightbox] = useState<LightboxState>(null);
 
-  // Filter products by search query
+  // Debounce search input (250ms)
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(searchQuery), 250);
+    return () => clearTimeout(id);
+  }, [searchQuery]);
+
+  // Filter products by debounced search query
   const filteredProducts = useMemo(() => {
-    if (!searchQuery.trim()) return products;
-    const q = searchQuery.toLowerCase();
+    if (!debouncedSearch.trim()) return products;
+    const q = debouncedSearch.toLowerCase();
     return products.filter((p) => p.name.toLowerCase().includes(q));
-  }, [products, searchQuery]);
+  }, [products, debouncedSearch]);
 
   const productsByCategory = useMemo(() => {
     const map = new Map<string, ProductRow[]>();
@@ -297,7 +308,7 @@ export function EditOrderCart({ orderId, categories, products, currentItems }: E
         </Card>
       )}
 
-      {/* Product catalog — one row per modifier */}
+      {/* Product catalog */}
       {categoriesWithProducts.map((cat) => (
         <Card key={cat.id}>
           <CardHeader>
@@ -305,69 +316,119 @@ export function EditOrderCart({ orderId, categories, products, currentItems }: E
           </CardHeader>
           <CardContent>
             <div className="rounded-md border divide-y">
-              {(productsByCategory.get(cat.id) ?? []).flatMap((product) =>
-                product.modifiers.map((modifier) => {
-                  const inCart = cart.items.get(modifier.id);
-                  return (
-                    <div
-                      key={modifier.id}
-                      className="flex items-center gap-3 px-4 py-3"
-                    >
-                      <Package className="size-4 text-muted-foreground shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium">{product.name}</span>
-                        <p className="text-xs text-muted-foreground">
-                          {formatPrice(modifier.price)} · {modifier.label}
-                        </p>
+              {(productsByCategory.get(cat.id) ?? []).map((product) => {
+                const outOfStock = !product.in_stock;
+                const hasMultipleModifiers = product.modifiers.length > 1;
+                const activeModifierId = selectedModifiers[product.id] ?? product.modifiers[0]?.id;
+                const activeModifier = product.modifiers.find((m) => m.id === activeModifierId) ?? product.modifiers[0];
+                const inCart = activeModifier ? cart.items.get(activeModifier.id) : undefined;
+                return (
+                  <div
+                    key={product.id}
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-3",
+                      outOfStock && "opacity-60"
+                    )}
+                  >
+                    {product.images?.[0] ? (
+                      <button
+                        type="button"
+                        onClick={() => setLightbox({ images: product.images, name: product.name, index: 0 })}
+                        className="shrink-0 relative"
+                      >
+                        <Image
+                          src={product.images[0].url}
+                          alt={product.name}
+                          width={72}
+                          height={72}
+                          className="size-[72px] rounded-md object-cover"
+                        />
+                        {product.images.length > 1 && (
+                          <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
+                            {product.images.length}
+                          </span>
+                        )}
+                      </button>
+                    ) : (
+                      <div className="flex size-[72px] shrink-0 items-center justify-center rounded-md bg-muted">
+                        <Package className="size-6 text-muted-foreground" />
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {inCart ? (
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="size-8"
-                              onClick={() =>
-                                dispatch({
-                                  type: "UPDATE_QUANTITY",
-                                  payload: { modifier_id: modifier.id, quantity: inCart.quantity - 1 },
-                                })
-                              }
-                            >
-                              <Minus className="size-3" />
-                            </Button>
-                            <span className="text-sm font-medium w-8 text-center">
-                              {inCart.quantity}
-                            </span>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="size-8"
-                              onClick={() =>
-                                dispatch({
-                                  type: "UPDATE_QUANTITY",
-                                  payload: { modifier_id: modifier.id, quantity: inCart.quantity + 1 },
-                                })
-                              }
-                            >
-                              <Plus className="size-3" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleAddModifier(product, modifier)}
-                            className="min-w-[44px]"
-                          >
-                            Add
-                          </Button>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-medium truncate">{product.name}</span>
+                        {outOfStock && (
+                          <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 shrink-0">
+                            Out of Stock
+                          </span>
                         )}
                       </div>
+                      {hasMultipleModifiers ? (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {product.modifiers.map((m) => {
+                            const qty = cart.items.get(m.id)?.quantity;
+                            return (
+                              <button
+                                key={m.id}
+                                type="button"
+                                onClick={() => setSelectedModifiers((prev) => ({ ...prev, [product.id]: m.id }))}
+                                className={cn(
+                                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors",
+                                  m.id === activeModifierId
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                                )}
+                              >
+                                {m.label}
+                                {qty != null && (
+                                  <span className={cn(
+                                    "inline-flex items-center justify-center size-4 rounded-full text-[9px] font-bold",
+                                    m.id === activeModifierId
+                                      ? "bg-primary-foreground text-primary"
+                                      : "bg-foreground/15"
+                                  )}>
+                                    {qty}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {formatPrice(activeModifier.price)}{!hasMultipleModifiers && ` · ${activeModifier.label}`}
+                      </p>
                     </div>
-                  );
-                })
-              )}
+                    <div className="flex items-center gap-2 shrink-0">
+                      {outOfStock ? (
+                        <Button variant="outline" size="sm" disabled className="min-w-[44px]">Add</Button>
+                      ) : inCart ? (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="size-8"
+                            onClick={() => dispatch({ type: "UPDATE_QUANTITY", payload: { modifier_id: activeModifier.id, quantity: inCart.quantity - 1 } })}
+                          >
+                            <Minus className="size-3" />
+                          </Button>
+                          <span className="text-sm font-medium w-8 text-center">{inCart.quantity}</span>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="size-8"
+                            onClick={() => dispatch({ type: "UPDATE_QUANTITY", payload: { modifier_id: activeModifier.id, quantity: inCart.quantity + 1 } })}
+                          >
+                            <Plus className="size-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button variant="outline" size="sm" onClick={() => handleAddModifier(product, activeModifier)} className="min-w-[44px]">Add</Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -393,6 +454,8 @@ export function EditOrderCart({ orderId, categories, products, currentItems }: E
           </div>
         </div>
       </div>
+
+      <ProductImageLightbox state={lightbox} onClose={() => setLightbox(null)} onChange={setLightbox} />
     </div>
   );
 }

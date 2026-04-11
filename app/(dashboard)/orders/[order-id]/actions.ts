@@ -82,27 +82,29 @@ export async function updateOrderStatus(
   revalidatePath("/orders");
   revalidatePath(`/orders/${orderId}`);
 
-  // Email notifications (awaited so they complete before response ends)
-  try {
-    if (newStatus === "approved") {
-      const [{ data: storeData }, { count: itemCount }, { data: orderItems }] = await Promise.all([
-        supabase.from("stores").select("name").eq("id", order.store_id).single(),
-        supabase.from("order_items").select("id", { count: "exact", head: true }).eq("order_id", orderId),
-        supabase.from("order_items").select("product_name, modifier, quantity, unit_price").eq("order_id", orderId),
-      ]);
-      await notifyOrderApproved(
-        orderId, order.order_number, storeData?.name ?? "Unknown", order.submitted_by, itemCount ?? 0,
-        (orderItems ?? []).map((i) => ({
-          product_name: i.product_name,
-          modifier: i.modifier,
-          quantity: i.quantity,
-          unit_price: Number(i.unit_price),
-        })),
-        order.store_id,
-      );
-    }
-  } catch (e) {
-    console.error("[email] Failed to notify order status change:", e);
+  // Fire-and-forget: send email notification without blocking the response
+  if (newStatus === "approved") {
+    (async () => {
+      try {
+        const [{ data: storeData }, { count: itemCount }, { data: orderItems }] = await Promise.all([
+          supabase.from("stores").select("name").eq("id", order.store_id).single(),
+          supabase.from("order_items").select("id", { count: "exact", head: true }).eq("order_id", orderId),
+          supabase.from("order_items").select("product_name, modifier, quantity, unit_price").eq("order_id", orderId),
+        ]);
+        await notifyOrderApproved(
+          orderId, order.order_number, storeData?.name ?? "Unknown", order.submitted_by, itemCount ?? 0,
+          (orderItems ?? []).map((i) => ({
+            product_name: i.product_name,
+            modifier: i.modifier,
+            quantity: i.quantity,
+            unit_price: Number(i.unit_price),
+          })),
+          order.store_id,
+        );
+      } catch (e) {
+        console.error("[email] Failed to notify order status change:", e);
+      }
+    })();
   }
 
   return { data: undefined, error: null };
@@ -253,24 +255,20 @@ export async function fulfillOrder(
   revalidatePath("/orders");
   revalidatePath(`/orders/${orderId}`);
 
-  // Notify store user about fulfillment
-  try {
-    const { data: orderData } = await supabase
-      .from("orders")
-      .select("submitted_by, order_number")
-      .eq("id", orderId)
-      .single();
-    const { data: invoice } = await supabase
-      .from("invoices")
-      .select("id, invoice_number")
-      .eq("order_id", orderId)
-      .single();
-    if (orderData && invoice) {
-      await notifyOrderFulfilled(orderId, orderData.order_number, orderData.submitted_by, invoice.id, invoice.invoice_number);
+  // Fire-and-forget: send email notification without blocking the response
+  (async () => {
+    try {
+      const [{ data: orderData }, { data: invoice }] = await Promise.all([
+        supabase.from("orders").select("submitted_by, order_number").eq("id", orderId).single(),
+        supabase.from("invoices").select("id, invoice_number").eq("order_id", orderId).single(),
+      ]);
+      if (orderData && invoice) {
+        await notifyOrderFulfilled(orderId, orderData.order_number, orderData.submitted_by, invoice.id, invoice.invoice_number);
+      }
+    } catch (e) {
+      console.error("[email] Failed to notify order fulfilled:", e);
     }
-  } catch (e) {
-    console.error("[email] Failed to notify order fulfilled:", e);
-  }
+  })();
 
   return { data: undefined, error: null };
 }
@@ -383,6 +381,15 @@ export async function editOrderItems(
   if (insertError) {
     return { data: null, error: "Failed to update order items." };
   }
+
+  // Record edit in status history
+  await supabase
+    .from("order_status_history")
+    .insert({
+      order_id: orderId,
+      status: "edited",
+      changed_by: user.id,
+    });
 
   revalidatePath("/orders");
   revalidatePath(`/orders/${orderId}`);

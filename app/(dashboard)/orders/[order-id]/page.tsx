@@ -47,8 +47,8 @@ export default async function OrderDetailPage({
   // RLS denied or not found → redirect
   if (!order) redirect("/orders");
 
-  // Fetch items, history, store, invoice, financial settings, billing in parallel
-  const [itemsRes, historyRes, storeRes, invoiceRes, financialRes, storeBillingRes] =
+  // Fetch items, history, store (single query), invoice, financial settings in parallel
+  const [itemsRes, historyRes, storeRes, invoiceRes, financialRes] =
     await timer.time("parallel-queries", () =>
       Promise.all([
         supabase
@@ -63,7 +63,7 @@ export default async function OrderDetailPage({
           .order("changed_at", { ascending: true }),
         supabase
           .from("stores")
-          .select("name")
+          .select("name, business_name, address, postal_code, phone, email")
           .eq("id", order.store_id)
           .single(),
         supabase
@@ -75,11 +75,6 @@ export default async function OrderDetailPage({
           .from("financial_settings")
           .select("key, value")
           .in("key", ["hst_rate", "ad_royalties_fee", "commissary_name", "commissary_address", "commissary_postal_code", "commissary_phone"]),
-        supabase
-          .from("stores")
-          .select("business_name, address, postal_code, phone, email")
-          .eq("id", order.store_id)
-          .single(),
       ])
     );
 
@@ -88,7 +83,7 @@ export default async function OrderDetailPage({
   const storeName = storeRes.data?.name ?? null;
   const invoiceId: string | null = invoiceRes.data?.id ?? null;
   const financialSettings = financialRes.data;
-  const storeBilling = storeBillingRes.data;
+  const storeBilling = storeRes.data;
 
   // Resolve names for status history changed_by users + submitter
   const changedByMap: Record<string, string> = {};
@@ -97,7 +92,7 @@ export default async function OrderDetailPage({
   const uniqueUserIds = [...new Set([
     ...(history ?? []).map((h) => h.changed_by),
     order.submitted_by,
-  ])];
+  ].filter(Boolean))];
   if (uniqueUserIds.length > 0) {
     const adminClient = createAdminClient();
     const results = await timer.time(
@@ -407,17 +402,17 @@ export default async function OrderDetailPage({
           <CardContent>
             <ol className="relative border-l border-muted-foreground/25 ml-3 space-y-4">
               {statusHistory.map((entry) => {
-                const entryStatus = entry.status as OrderStatus;
+                const entryStatus = entry.status;
                 return (
                   <li key={entry.id} className="ml-6">
                     <span className="absolute -left-1.5 mt-1.5 size-3 rounded-full border-2 border-background bg-muted-foreground/50" />
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge
                         variant="status"
-                        style={STATUS_STYLES[entryStatus]}
+                        style={STATUS_STYLES[entryStatus] ?? {}}
                         className="text-xs"
                       >
-                        {STATUS_LABELS[entryStatus]}
+                        {STATUS_LABELS[entryStatus] ?? entryStatus}
                       </Badge>
                       <span className="text-xs text-muted-foreground">
                         {formatDate(entry.changed_at)}
